@@ -22,6 +22,7 @@ const REBUILD_EXE_NAME = "CodexRebuild.exe";
 const REBUILD_CLI_NAME = "codex-rebuild.exe";
 const REBUILD_APP_USER_MODEL_ID = "com.openai.codex.rebuild";
 const REBUILD_WINDOWS_IDENTITY = "OpenAI.CodexRebuild";
+const REBUILD_CODEX_HOME_DIR = "CodexRebuildHome";
 const REBUILD_ICON_PATH = path.join(PROJECT_ROOT, "resources", "codex-rebuild.ico");
 const RCEDIT_PATH = path.join(PROJECT_ROOT, "node_modules", "electron-winstaller", "vendor", "rcedit.exe");
 
@@ -323,6 +324,7 @@ function patchRebuildBootstrap(asarDir) {
   let text = fs.readFileSync(bootstrapPath, "utf-8");
   const marker = "process.platform===`win32`&&r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`";
   if (text.includes(marker)) {
+    text = patchBootstrapCodexHomeOverride(text);
     text = patchBootstrapAppUserModelOverride(text);
     fs.writeFileSync(bootstrapPath, text, "utf-8");
     console.log("   [identity] bootstrap Rebuild isolation already present");
@@ -336,6 +338,7 @@ function patchRebuildBootstrap(asarDir) {
   const injection = [
     needle,
     `if(process.platform===\`win32\`&&r.basename(process.execPath).toLowerCase()===\`codexrebuild.exe\`){`,
+    `process.env.CODEX_HOME||(process.env.CODEX_HOME=r.join(n.app.getPath(\`appData\`),\`${REBUILD_CODEX_HOME_DIR}\`));`,
     `process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`));`,
     `process.env.CODEX_CLI_PATH||(process.env.CODEX_CLI_PATH=r.join(process.resourcesPath,\`${REBUILD_CLI_NAME}\`));`,
     `n.app.setName(\`${REBUILD_PRODUCT_NAME}\`);`,
@@ -346,6 +349,18 @@ function patchRebuildBootstrap(asarDir) {
   text = patchBootstrapAppUserModelOverride(text);
   fs.writeFileSync(bootstrapPath, text, "utf-8");
   console.log("   [identity] injected Rebuild userData/AppUserModelID bootstrap patch");
+}
+
+function patchBootstrapCodexHomeOverride(text) {
+  const userDataExpr = "process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(`appData`),`CodexRebuild`));";
+  const codexHomeExpr = `process.env.CODEX_HOME||(process.env.CODEX_HOME=r.join(n.app.getPath(\`appData\`),\`${REBUILD_CODEX_HOME_DIR}\`));`;
+  if (text.includes(codexHomeExpr)) return text;
+  if (!text.includes(userDataExpr)) {
+    console.log("   [!] bootstrap CODEX_HOME insertion point not found");
+    return text;
+  }
+  console.log("   [identity] patched bootstrap CODEX_HOME isolation");
+  return text.replace(userDataExpr, `${codexHomeExpr}${userDataExpr}`);
 }
 
 function patchBootstrapAppUserModelOverride(text) {
