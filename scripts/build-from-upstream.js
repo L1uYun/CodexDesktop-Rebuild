@@ -17,6 +17,13 @@ const { execSync } = require("child_process");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const SRC_DIR = path.join(PROJECT_ROOT, "src");
 const OUT_DIR = path.join(PROJECT_ROOT, "out");
+const REBUILD_PRODUCT_NAME = "Codex Rebuild";
+const REBUILD_EXE_NAME = "CodexRebuild.exe";
+const REBUILD_CLI_NAME = "codex-rebuild.exe";
+const REBUILD_APP_USER_MODEL_ID = "com.openai.codex.rebuild";
+const REBUILD_WINDOWS_IDENTITY = "OpenAI.CodexRebuild";
+const REBUILD_ICON_PATH = path.join(PROJECT_ROOT, "resources", "codex-rebuild.ico");
+const RCEDIT_PATH = path.join(PROJECT_ROOT, "node_modules", "electron-winstaller", "vendor", "rcedit.exe");
 
 const TARGET_TRIPLE_MAP = {
   "mac-arm64": "aarch64-apple-darwin",
@@ -212,6 +219,20 @@ function buildWin(platform) {
   copyRecursive(appDir, outApp);
 
   const resourcesDir = path.join(outApp, "resources");
+  patchRebuildAsarMetadata(asarDir);
+  patchRebuildBootstrap(asarDir);
+  ensureRebuildIcon();
+  patchRebuildResourceIcons(resourcesDir);
+
+  const rebuildExePath = path.join(outApp, REBUILD_EXE_NAME);
+  const upstreamExePath = path.join(outApp, "Codex.exe");
+  if (fs.existsSync(upstreamExePath)) {
+    fs.copyFileSync(upstreamExePath, rebuildExePath);
+    patchRebuildExeResources(rebuildExePath);
+    console.log("   [exe] added CodexRebuild.exe launcher");
+  } else {
+    console.log("   [!] Codex.exe not found for CodexRebuild.exe launcher");
+  }
 
   // Compute old ASAR header hash (before repack)
   const asarPath = path.join(resourcesDir, "app.asar");
@@ -234,10 +255,15 @@ function buildWin(platform) {
     } else {
       console.log("   [!] Codex.exe not found for hash patching");
     }
+    if (fs.existsSync(rebuildExePath)) {
+      patchExeHash(rebuildExePath, oldHash, newHash);
+    } else {
+      console.log("   [!] CodexRebuild.exe not found for hash patching");
+    }
   }
 
-  // Replace codex CLI
-  replaceCodex(platform, resourcesDir, "codex.exe");
+  // Add rebuilt codex CLI without replacing upstream codex.exe
+  addRebuildCodex(platform, resourcesDir, REBUILD_CLI_NAME);
 
   // Create ZIP
   const version = getVersion(asarDir);
@@ -273,6 +299,99 @@ function patchExeHash(exePath, oldHash, newHash) {
   console.log(`   [integrity] exe hash patched at offset ${idx}`);
 }
 
+function patchRebuildAsarMetadata(asarDir) {
+  const pkgPath = path.join(asarDir, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+    console.log("   [!] package.json not found for Rebuild metadata patch");
+    return;
+  }
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+  pkg.name = "openai-codex-rebuild-electron";
+  pkg.productName = REBUILD_PRODUCT_NAME;
+  pkg.description = "Codex Rebuild";
+  pkg.codexWindowsPackageIdentity = REBUILD_WINDOWS_IDENTITY;
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+  console.log("   [identity] patched ASAR package metadata for Codex Rebuild");
+}
+
+function patchRebuildBootstrap(asarDir) {
+  const bootstrapPath = path.join(asarDir, ".vite", "build", "bootstrap.js");
+  if (!fs.existsSync(bootstrapPath)) {
+    console.log("   [!] bootstrap.js not found for Rebuild identity patch");
+    return;
+  }
+  let text = fs.readFileSync(bootstrapPath, "utf-8");
+  const marker = "process.platform===`win32`&&r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`";
+  if (text.includes(marker)) {
+    text = patchBootstrapAppUserModelOverride(text);
+    fs.writeFileSync(bootstrapPath, text, "utf-8");
+    console.log("   [identity] bootstrap Rebuild isolation already present");
+    return;
+  }
+  const needle = "let n=require(`electron`),r=require(`node:path`);";
+  if (!text.includes(needle)) {
+    console.log("   [!] bootstrap require pattern not found for Rebuild identity patch");
+    return;
+  }
+  const injection = [
+    needle,
+    `if(process.platform===\`win32\`&&r.basename(process.execPath).toLowerCase()===\`codexrebuild.exe\`){`,
+    `process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`));`,
+    `process.env.CODEX_CLI_PATH||(process.env.CODEX_CLI_PATH=r.join(process.resourcesPath,\`${REBUILD_CLI_NAME}\`));`,
+    `n.app.setName(\`${REBUILD_PRODUCT_NAME}\`);`,
+    `n.app.setAppUserModelId(\`${REBUILD_APP_USER_MODEL_ID}\`)`,
+    `}`,
+  ].join("");
+  text = text.replace(needle, injection);
+  text = patchBootstrapAppUserModelOverride(text);
+  fs.writeFileSync(bootstrapPath, text, "utf-8");
+  console.log("   [identity] injected Rebuild userData/AppUserModelID bootstrap patch");
+}
+
+function patchBootstrapAppUserModelOverride(text) {
+  const original = "process.platform===`win32`&&n.app.setAppUserModelId(t.b(x));";
+  const replacement = "process.platform===`win32`&&n.app.setAppUserModelId(r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`?`com.openai.codex.rebuild`:t.b(x));";
+  if (text.includes(replacement)) return text;
+  if (!text.includes(original)) {
+    console.log("   [!] bootstrap AppUserModelID override pattern not found");
+    return text;
+  }
+  console.log("   [identity] patched bootstrap AppUserModelID override");
+  return text.replace(original, replacement);
+}
+
+function ensureRebuildIcon() {
+  if (fs.existsSync(REBUILD_ICON_PATH)) return;
+  const scriptPath = path.join(__dirname, "make-rebuild-icon.ps1");
+  execSync(`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}" -OutputPath "${REBUILD_ICON_PATH}"`, { stdio: "pipe" });
+  console.log("   [icon] generated resources/codex-rebuild.ico");
+}
+
+function patchRebuildResourceIcons(resourcesDir) {
+  const iconPath = path.join(resourcesDir, "icon.ico");
+  fs.copyFileSync(REBUILD_ICON_PATH, iconPath);
+  fs.copyFileSync(REBUILD_ICON_PATH, path.join(resourcesDir, "codex-rebuild.ico"));
+  console.log("   [icon] patched Electron resource icons for Codex Rebuild");
+}
+
+function patchRebuildExeResources(exePath) {
+  if (!fs.existsSync(RCEDIT_PATH)) {
+    console.log("   [!] rcedit not found, skipping exe resource patch");
+    return;
+  }
+  const args = [
+    `"${exePath}"`,
+    "--set-version-string", "FileDescription", `"${REBUILD_PRODUCT_NAME}"`,
+    "--set-version-string", "ProductName", `"${REBUILD_PRODUCT_NAME}"`,
+    "--set-version-string", "InternalName", `"${REBUILD_EXE_NAME}"`,
+    "--set-version-string", "OriginalFilename", `"${REBUILD_EXE_NAME}"`,
+    "--set-version-string", "CompanyName", `"Codex Rebuild"`,
+    "--set-icon", `"${REBUILD_ICON_PATH}"`,
+  ];
+  execSync(`"${RCEDIT_PATH}" ${args.join(" ")}`, { stdio: "pipe" });
+  console.log("   [identity] patched CodexRebuild.exe icon and version metadata");
+}
+
 function updateAsarIntegrity(asarPath, infoPlistPath) {
   const newHash = computeAsarHeaderHash(asarPath);
   execSync(`plutil -replace ElectronAsarIntegrity.Resources/app\\\\.asar.hash -string "${newHash}" "${infoPlistPath}"`, { stdio: "pipe" });
@@ -298,6 +417,18 @@ function replaceCodex(platform, resourcesDir, binName) {
     console.log(`   [codex] replaced with @cometix/codex`);
   } else {
     console.log(`   [!] @cometix/codex not found, keeping upstream codex`);
+  }
+}
+
+function addRebuildCodex(platform, resourcesDir, binName) {
+  const vendor = resolveCodexVendor(platform);
+  if (vendor) {
+    const dest = path.join(resourcesDir, binName);
+    fs.copyFileSync(vendor, dest);
+    try { fs.chmodSync(dest, 0o755); } catch {}
+    console.log(`   [codex] added ${binName} from @cometix/codex`);
+  } else {
+    console.log(`   [!] @cometix/codex not found, skipping ${binName}`);
   }
 }
 
