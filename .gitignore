@@ -7,6 +7,8 @@ node_modules/
 # Build outputs
 out/
 dist/
+releases/*.zip
+!releases/*.zip.part*
 
 # Upstream ASAR extracts and build-time copies (all generated)
 src/
