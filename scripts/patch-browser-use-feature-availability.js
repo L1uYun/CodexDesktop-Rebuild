@@ -5,18 +5,46 @@
  * The renderer can mention the Chrome plugin while desktop feature availability
  * still reports browser-use as unavailable. In that state the main process does
  * not generate the node_repl MCP server config, so @chrome never becomes a
- * callable tool. Rebuild keeps the upstream gate for official Codex.exe and
- * only forces Chrome browser-use when running as CodexRebuild.exe on Windows.
+ * callable tool. The native-pipe bridge is also keyed only from
+ * inAppBrowserUse upstream, while Chrome uses externalBrowserUse. Rebuild keeps
+ * the upstream gate for official Codex.exe and only forces Chrome browser-use
+ * when running as CodexRebuild.exe on Windows.
  */
 const fs = require("fs");
 const { locateBundles, relPath } = require("./patch-util");
 
 function patchSource(source) {
-  const original = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
-  const replacement = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){d===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(t={...t,externalBrowserUse:!0,externalBrowserUseAllowed:!0});let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
-  if (source.includes(replacement)) return { source, changed: false, reason: "already patched" };
-  if (!source.includes(original)) return { source, changed: false, failed: true, reason: "browser-use feature availability pattern not found" };
-  return { source: source.replace(original, replacement), changed: true, reason: "forced Rebuild Chrome browser-use availability" };
+  const availabilityOriginal = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
+  const availabilityReplacement = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){d===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(t={...t,externalBrowserUse:!0,externalBrowserUseAllowed:!0});let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
+  const pipeOriginal = "function $e({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{t.inAppBrowserUse!=null&&e(t.inAppBrowserUse)},dispose:()=>{e(!1)}}}";
+  const pipeReplacement = "function $e({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{(t.inAppBrowserUse!=null||t.externalBrowserUse!=null)&&e(t.inAppBrowserUse||t.externalBrowserUse)},dispose:()=>{e(!1)}}}";
+
+  let next = source;
+  const changes = [];
+  const missing = [];
+
+  if (next.includes(availabilityReplacement)) {
+    changes.push("availability already patched");
+  } else if (next.includes(availabilityOriginal)) {
+    next = next.replace(availabilityOriginal, availabilityReplacement);
+    changes.push("forced Rebuild Chrome browser-use availability");
+  } else {
+    missing.push("browser-use feature availability pattern not found");
+  }
+
+  if (next.includes(pipeReplacement)) {
+    changes.push("native pipe already patched");
+  } else if (next.includes(pipeOriginal)) {
+    next = next.replace(pipeOriginal, pipeReplacement);
+    changes.push("enabled native pipe for external browser-use");
+  } else {
+    missing.push("browser-use native pipe pattern not found");
+  }
+
+  if (missing.length > 0) {
+    return { source: next, changed: next !== source, failed: true, reason: missing.join("; ") };
+  }
+  return { source: next, changed: next !== source, reason: changes.join("; ") };
 }
 
 function main() {
