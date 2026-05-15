@@ -69,6 +69,7 @@ function main() {
 
   runPatchScript("patch-browser-client-discovery-timeout.js");
   runPatchScript("patch-browser-trust-bridge.js");
+  runPatchScript("patch-browser-use-feature-availability.js");
   patchExternalBrowserClients(installDir);
 
   const oldHash = computeAsarHeaderHash(asarPath);

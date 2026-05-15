@@ -209,6 +209,7 @@ function buildWin(platform) {
 
   runPatchScript("patch-browser-client-discovery-timeout.js", "win");
   runPatchScript("patch-browser-trust-bridge.js", "win");
+  runPatchScript("patch-browser-use-feature-availability.js", "win");
 
   // Copy synced Windows resources to output.
   const outAppDir = path.join(OUT_DIR, "win");
