@@ -4,13 +4,16 @@
  * hash allowlist.
  *
  * node_repl injects import.meta.__codexNativePipe into imported modules whose
- * source hash is listed in NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S. Do not use
- * NODE_REPL_TRUSTED_CODE_PATHS for the bundled Chrome plugin: trusting the full
- * plugin directory makes Codex Rebuild hang during startup on Windows.
+ * source hash is listed in NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S. Include
+ * both the packaged Rebuild copy and the user's openai-bundled cache copy:
+ * plugin skills may import either one. Do not use NODE_REPL_TRUSTED_CODE_PATHS
+ * for the bundled Chrome plugin: trusting the full plugin directory makes
+ * Codex Rebuild hang during startup on Windows.
  */
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { homedir } = require("os");
 const { locateBundles, relPath, SRC_DIR } = require("./patch-util");
 
 const DANGEROUS_TRUSTED_PATH_EXPRS = [
@@ -23,11 +26,23 @@ function hashFile(filePath) {
 }
 
 function findBrowserClientHashes(platform) {
-  const pluginRoot = path.join(SRC_DIR, platform, "plugins", "openai-bundled", "plugins");
-  const candidates = [
-    path.join(pluginRoot, "chrome", "scripts", "browser-client.mjs"),
-    path.join(pluginRoot, "browser-use", "scripts", "browser-client.mjs"),
+  const pluginRoots = [
+    path.join(SRC_DIR, platform, "plugins", "openai-bundled", "plugins"),
+    path.join(
+      process.env.APPDATA || path.join(homedir(), "AppData", "Roaming"),
+      "CodexRebuild",
+      "bundled-marketplaces",
+      "openai-bundled",
+      "plugins",
+    ),
+    path.join(homedir(), ".codex", "plugins", "cache", "openai-bundled"),
   ];
+  const candidates = pluginRoots.flatMap((pluginRoot) => [
+    path.join(pluginRoot, "chrome", "scripts", "browser-client.mjs"),
+    path.join(pluginRoot, "chrome", "0.1.7", "scripts", "browser-client.mjs"),
+    path.join(pluginRoot, "browser-use", "scripts", "browser-client.mjs"),
+    path.join(pluginRoot, "browser-use", "0.1.0-alpha2", "scripts", "browser-client.mjs"),
+  ]);
   const hashes = candidates.filter((file) => fs.existsSync(file)).map(hashFile);
   return [...new Set(hashes)].sort();
 }

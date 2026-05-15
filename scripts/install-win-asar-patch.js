@@ -27,6 +27,7 @@ function patchExternalBrowserClients(installDir) {
   for (const pluginRoot of pluginRoots) {
     if (!fs.existsSync(pluginRoot)) continue;
     runPatchScript("patch-browser-client-discovery-timeout.js", ["--plugin-root", pluginRoot]);
+    runPatchScript("patch-browser-tool-call-guidance.js", ["--plugin-root", pluginRoot]);
   }
 }
 
@@ -70,6 +71,8 @@ function main() {
   runPatchScript("patch-browser-client-discovery-timeout.js");
   runPatchScript("patch-browser-trust-bridge.js");
   runPatchScript("patch-browser-use-feature-availability.js");
+  runPatchScript("patch-browser-use-js-repl-feature.js");
+  runPatchScript("patch-browser-tool-call-guidance.js");
   patchExternalBrowserClients(installDir);
 
   const oldHash = computeAsarHeaderHash(asarPath);
