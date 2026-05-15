@@ -9,6 +9,26 @@ const { execFileSync } = require("child_process");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const DEFAULT_INSTALL_DIR = "D:\\software\\CodexRebuild";
 const ASAR_SRC_DIR = path.join(PROJECT_ROOT, "src", "win", "_asar");
+const REBUILD_BUNDLED_MARKETPLACE_DIR = path.join(process.env.APPDATA || path.join(require("os").homedir(), "AppData", "Roaming"), "CodexRebuild", "bundled-marketplaces", "openai-bundled", "plugins");
+
+function runPatchScript(scriptName, args = ["win"]) {
+  execFileSync("node", [path.join(__dirname, scriptName), ...args], {
+    cwd: PROJECT_ROOT,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+}
+
+function patchExternalBrowserClients(installDir) {
+  const pluginRoots = [
+    path.join(installDir, "resources", "plugins", "openai-bundled", "plugins"),
+    REBUILD_BUNDLED_MARKETPLACE_DIR,
+  ];
+  for (const pluginRoot of pluginRoots) {
+    if (!fs.existsSync(pluginRoot)) continue;
+    runPatchScript("patch-browser-client-discovery-timeout.js", ["--plugin-root", pluginRoot]);
+  }
+}
 
 function computeAsarHeaderHash(asarPath) {
   const crypto = require("crypto");
@@ -46,6 +66,10 @@ function main() {
 
   if (!fs.existsSync(ASAR_SRC_DIR)) throw new Error(`Missing ASAR source: ${ASAR_SRC_DIR}`);
   if (!fs.existsSync(asarPath)) throw new Error(`Missing installed app.asar: ${asarPath}`);
+
+  runPatchScript("patch-browser-client-discovery-timeout.js");
+  runPatchScript("patch-browser-trust-bridge.js");
+  patchExternalBrowserClients(installDir);
 
   const oldHash = computeAsarHeaderHash(asarPath);
   console.log(`[old] ${oldHash}`);

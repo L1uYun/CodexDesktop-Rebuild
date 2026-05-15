@@ -207,6 +207,9 @@ function buildWin(platform) {
     process.exit(1);
   }
 
+  runPatchScript("patch-browser-client-discovery-timeout.js", "win");
+  runPatchScript("patch-browser-trust-bridge.js", "win");
+
   // Copy synced Windows resources to output.
   const outAppDir = path.join(OUT_DIR, "win");
   clearDir(outAppDir);
@@ -604,6 +607,11 @@ function patchRebuildExeResources(exePath) {
   ];
   execSync(`"${RCEDIT_PATH}" ${args.join(" ")}`, { stdio: "pipe" });
   console.log("   [identity] patched CodexRebuild.exe icon and version metadata");
+}
+
+function runPatchScript(scriptName, platform) {
+  const scriptPath = path.join(__dirname, scriptName);
+  execSync(`node "${scriptPath}" ${platform}`, { cwd: PROJECT_ROOT, stdio: "inherit" });
 }
 
 function updateAsarIntegrity(asarPath, infoPlistPath) {
