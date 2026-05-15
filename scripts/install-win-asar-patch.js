@@ -21,6 +21,16 @@ function computeAsarHeaderHash(asarPath) {
 function patchExeHash(exePath, oldHash, newHash) {
   if (!fs.existsSync(exePath)) return "missing";
   const buf = fs.readFileSync(exePath);
+  const text = buf.toString("latin1");
+  const integrityRe = /(\[\{"file":"resources\\\\app\.asar","alg":"SHA256","value":")([a-f0-9]{64})("\}\])/;
+  const integrityMatch = integrityRe.exec(text);
+  if (integrityMatch) {
+    const oldValue = integrityMatch[2];
+    const idx = integrityMatch.index + integrityMatch[1].length;
+    Buffer.from(newHash, "ascii").copy(buf, idx);
+    fs.writeFileSync(exePath, buf);
+    return oldValue === newHash ? `already patched at ${idx}` : `patched integrity at ${idx}`;
+  }
   const oldBuf = Buffer.from(oldHash, "ascii");
   const idx = buf.indexOf(oldBuf);
   if (idx < 0) return "old hash not found";
@@ -49,11 +59,9 @@ function main() {
   const newHash = computeAsarHeaderHash(asarPath);
   console.log(`[new] ${newHash}`);
 
-  if (oldHash !== newHash) {
-    for (const exeName of ["Codex.exe", "CodexRebuild.exe"]) {
-      const result = patchExeHash(path.join(installDir, exeName), oldHash, newHash);
-      console.log(`[exe] ${exeName}: ${result}`);
-    }
+  for (const exeName of ["Codex.exe", "CodexRebuild.exe"]) {
+    const result = patchExeHash(path.join(installDir, exeName), oldHash, newHash);
+    console.log(`[exe] ${exeName}: ${result}`);
   }
 }
 

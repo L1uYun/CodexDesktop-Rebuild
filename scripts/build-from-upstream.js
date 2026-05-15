@@ -395,6 +395,7 @@ function patchRebuildBootstrap(asarDir) {
   const marker = "process.platform===`win32`&&r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`";
   if (text.includes(marker)) {
     text = patchBootstrapCodexHomeMirror(text);
+    text = patchBootstrapRebuildRuntimeEnv(text);
     text = patchBootstrapAppUserModelOverride(text);
     text = patchBootstrapRebuildUpdaterSkip(text);
     fs.writeFileSync(bootstrapPath, text, "utf-8");
@@ -410,6 +411,7 @@ function patchRebuildBootstrap(asarDir) {
     needle,
     `if(process.platform===\`win32\`&&r.basename(process.execPath).toLowerCase()===\`codexrebuild.exe\`){`,
     getRebuildCodexHomeMirrorRuntimeSnippet(),
+    getRebuildRuntimeEnvSnippet(),
     `process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);`,
     `process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`));`,
     `process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}||(process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`,\`bundled-marketplaces\`));`,
@@ -419,6 +421,7 @@ function patchRebuildBootstrap(asarDir) {
     `}`,
   ].join("");
   text = text.replace(needle, injection);
+  text = patchBootstrapRebuildRuntimeEnv(text);
   text = patchBootstrapAppUserModelOverride(text);
   text = patchBootstrapRebuildUpdaterSkip(text);
   fs.writeFileSync(bootstrapPath, text, "utf-8");
@@ -449,6 +452,22 @@ function patchBootstrapCodexHomeMirror(text) {
 
 function getRebuildCodexHomeMirrorRuntimeSnippet() {
   return `var __codexRebuildHome=r.join(require(\`node:os\`).homedir(),\`.codex\`);`;
+}
+
+function getRebuildRuntimeEnvSnippet() {
+  return `process.env.BUILD_FLAVOR||(process.env.BUILD_FLAVOR=\`prod\`);process.env.NODE_ENV||(process.env.NODE_ENV=\`production\`);`;
+}
+
+function patchBootstrapRebuildRuntimeEnv(text) {
+  const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  const runtimeExpr = getRebuildRuntimeEnvSnippet();
+  if (text.includes(runtimeExpr)) return text;
+  if (!text.includes(homeExpr)) {
+    console.log("   [!] bootstrap runtime env insertion point not found");
+    return text;
+  }
+  console.log("   [identity] patched Rebuild runtime env for production automation store");
+  return text.replace(homeExpr, `${runtimeExpr}${homeExpr}`);
 }
 
 function patchBootstrapAppUserModelOverride(text) {
