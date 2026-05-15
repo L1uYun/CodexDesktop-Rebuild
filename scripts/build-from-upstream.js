@@ -22,7 +22,7 @@ const REBUILD_EXE_NAME = "CodexRebuild.exe";
 const REBUILD_CLI_NAME = "codex-rebuild.exe";
 const REBUILD_APP_USER_MODEL_ID = "com.openai.codex.rebuild";
 const REBUILD_WINDOWS_IDENTITY = "OpenAI.CodexRebuild";
-const REBUILD_CODEX_HOME_DIR = "CodexRebuildHome";
+const REBUILD_BUNDLED_MARKETPLACE_ENV = "CODEX_REBUILD_BUNDLED_MARKETPLACE_ROOT";
 const REBUILD_ICON_PATH = path.join(PROJECT_ROOT, "resources", "codex-rebuild.ico");
 const RCEDIT_PATH = path.join(PROJECT_ROOT, "node_modules", "electron-winstaller", "vendor", "rcedit.exe");
 
@@ -202,26 +202,24 @@ function buildWin(platform) {
     process.exit(1);
   }
 
-  // Windows: use the MSIX extract cache
-  const tempDir = path.join(require("os").tmpdir(), "codex-sync");
-  const extractDir = path.join(tempDir, "win-extract");
-  const appDir = path.join(extractDir, "app");
-
-  if (!fs.existsSync(appDir)) {
-    console.error(`[x] MSIX extract not found. Run sync-upstream first.`);
+  if (!fs.existsSync(path.join(platformDir, "codex.exe"))) {
+    console.error(`[x] win resources not found. Run sync-upstream first.`);
     process.exit(1);
   }
 
-  // Copy app/ to output
+  // Copy synced Windows resources to output.
   const outAppDir = path.join(OUT_DIR, "win");
   clearDir(outAppDir);
   const outApp = path.join(outAppDir, "Codex-win32-x64");
-  console.log("   [copy] MSIX app/ -> out/");
-  copyRecursive(appDir, outApp);
+  console.log("   [copy] src/win resources -> out/");
+  copyWindowsResources(platformDir, outApp);
 
   const resourcesDir = path.join(outApp, "resources");
   patchRebuildAsarMetadata(asarDir);
   patchRebuildBootstrap(asarDir);
+  patchRebuildWindowsImmediateExit(asarDir);
+  patchRebuildChildProcessGoneFatal(asarDir);
+  patchRebuildBundledMarketplaceRoot(asarDir);
   ensureRebuildIcon();
   patchRebuildResourceIcons(resourcesDir);
 
@@ -237,8 +235,12 @@ function buildWin(platform) {
 
   // Compute old ASAR header hash (before repack)
   const asarPath = path.join(resourcesDir, "app.asar");
-  const oldHash = computeAsarHeaderHash(asarPath);
-  console.log(`   [integrity] old hash: ${oldHash.slice(0, 16)}...`);
+  const oldHash = fs.existsSync(asarPath) ? computeAsarHeaderHash(asarPath) : null;
+  if (oldHash) {
+    console.log(`   [integrity] old hash: ${oldHash.slice(0, 16)}...`);
+  } else {
+    console.log("   [integrity] old app.asar missing; exe hash patch will be skipped");
+  }
 
   // Repack patched ASAR
   console.log("   [asar pack] _asar/ -> app.asar");
@@ -248,7 +250,7 @@ function buildWin(platform) {
   const newHash = computeAsarHeaderHash(asarPath);
   console.log(`   [integrity] new hash: ${newHash.slice(0, 16)}...`);
 
-  if (oldHash !== newHash) {
+  if (oldHash && oldHash !== newHash) {
     // Find Codex.exe in app root
     const exePath = path.join(outApp, "Codex.exe");
     if (fs.existsSync(exePath)) {
@@ -271,10 +273,78 @@ function buildWin(platform) {
   const zipName = `Codex-win-x64-${version}.zip`;
   const zipPath = path.join(OUT_DIR, zipName);
   console.log(`   [zip] ${zipName}`);
-  execSync(`7zz a -tzip -mx=5 "${zipPath}" .`, { cwd: outApp });
+  createZip(outApp, zipPath);
 
   const sizeMB = (fs.statSync(zipPath).size / 1048576).toFixed(1);
   console.log(`   [ok] ${zipPath} (${sizeMB} MB)`);
+}
+
+function createZip(sourceDir, zipPath) {
+  const sevenZip = findExecutable(["7zz", "7z", "7za"]);
+  if (sevenZip) {
+    execSync(`"${sevenZip}" a -tzip -mx=5 "${zipPath}" .`, { cwd: sourceDir });
+    return;
+  }
+  if (fs.existsSync(zipPath)) fs.rmSync(zipPath, { force: true });
+  const tar = findExecutable(["tar"]);
+  if (!tar) throw new Error("No zip tool found: install 7-Zip or ensure tar is on PATH");
+  execSync(`"${tar}" -a -cf "${zipPath}" .`, { cwd: sourceDir });
+  if (!fs.existsSync(zipPath)) {
+    throw new Error(`ZIP was not created: ${zipPath}`);
+  }
+}
+
+function findExecutable(names) {
+  for (const name of names) {
+    try {
+      return execSync(`where ${name}`, { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).split(/\r?\n/)[0]?.trim() || null;
+    } catch {}
+  }
+  return null;
+}
+
+function copyWindowsResources(srcDir, outApp) {
+  fs.mkdirSync(outApp, { recursive: true });
+  const resourcesDir = path.join(outApp, "resources");
+  fs.mkdirSync(resourcesDir, { recursive: true });
+  for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
+    if (entry.name === "_asar") continue;
+    const sourcePath = path.join(srcDir, entry.name);
+    const targetRoot = isWindowsRootResource(entry.name) ? outApp : resourcesDir;
+    const targetPath = path.join(targetRoot, entry.name);
+    if (entry.isDirectory()) {
+      copyRecursive(sourcePath, targetPath);
+    } else if (!entry.isSymbolicLink()) {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+}
+
+function isWindowsRootResource(name) {
+  return [
+    "Codex.exe",
+    "codex.exe",
+    "icon.ico",
+    "chrome_100_percent.pak",
+    "chrome_200_percent.pak",
+    "d3dcompiler_47.dll",
+    "dxcompiler.dll",
+    "dxil.dll",
+    "ffmpeg.dll",
+    "icudtl.dat",
+    "libEGL.dll",
+    "libGLESv2.dll",
+    "LICENSE",
+    "LICENSES.chromium.html",
+    "locales",
+    "resources.pak",
+    "snapshot_blob.bin",
+    "v8_context_snapshot.bin",
+    "version",
+    "vk_swiftshader_icd.json",
+    "vk_swiftshader.dll",
+    "vulkan-1.dll",
+  ].includes(name);
 }
 
 // ─── ASAR integrity ─────────────────────────────────────────────
@@ -324,8 +394,9 @@ function patchRebuildBootstrap(asarDir) {
   let text = fs.readFileSync(bootstrapPath, "utf-8");
   const marker = "process.platform===`win32`&&r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`";
   if (text.includes(marker)) {
-    text = patchBootstrapCodexHomeOverride(text);
+    text = patchBootstrapCodexHomeMirror(text);
     text = patchBootstrapAppUserModelOverride(text);
+    text = patchBootstrapRebuildUpdaterSkip(text);
     fs.writeFileSync(bootstrapPath, text, "utf-8");
     console.log("   [identity] bootstrap Rebuild isolation already present");
     return;
@@ -338,8 +409,10 @@ function patchRebuildBootstrap(asarDir) {
   const injection = [
     needle,
     `if(process.platform===\`win32\`&&r.basename(process.execPath).toLowerCase()===\`codexrebuild.exe\`){`,
-    `process.env.CODEX_HOME||(process.env.CODEX_HOME=r.join(n.app.getPath(\`appData\`),\`${REBUILD_CODEX_HOME_DIR}\`));`,
+    getRebuildCodexHomeMirrorRuntimeSnippet(),
+    `process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);`,
     `process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`));`,
+    `process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}||(process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`,\`bundled-marketplaces\`));`,
     `process.env.CODEX_CLI_PATH||(process.env.CODEX_CLI_PATH=r.join(process.resourcesPath,\`${REBUILD_CLI_NAME}\`));`,
     `n.app.setName(\`${REBUILD_PRODUCT_NAME}\`);`,
     `n.app.setAppUserModelId(\`${REBUILD_APP_USER_MODEL_ID}\`)`,
@@ -347,20 +420,35 @@ function patchRebuildBootstrap(asarDir) {
   ].join("");
   text = text.replace(needle, injection);
   text = patchBootstrapAppUserModelOverride(text);
+  text = patchBootstrapRebuildUpdaterSkip(text);
   fs.writeFileSync(bootstrapPath, text, "utf-8");
   console.log("   [identity] injected Rebuild userData/AppUserModelID bootstrap patch");
 }
 
-function patchBootstrapCodexHomeOverride(text) {
+function patchBootstrapCodexHomeMirror(text) {
+  const legacyCodexHomeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=r.join(n.app.getPath(`appData`),`CodexRebuildHome`));";
   const userDataExpr = "process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(`appData`),`CodexRebuild`));";
-  const codexHomeExpr = `process.env.CODEX_HOME||(process.env.CODEX_HOME=r.join(n.app.getPath(\`appData\`),\`${REBUILD_CODEX_HOME_DIR}\`));`;
-  if (text.includes(codexHomeExpr)) return text;
+  const mirrorExpr = `${getRebuildCodexHomeMirrorRuntimeSnippet()}process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);`;
+  const marketplaceExpr = `process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}||(process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`,\`bundled-marketplaces\`));`;
+  text = text.replace(legacyCodexHomeExpr, "");
+  const rebuildHomeStart = "var __codexRebuildFs=require(`node:fs`),__codexRebuildSourceHome=r.join(require(`node:os`).homedir(),`.codex`),__codexRebuildHome=r.join(n.app.getPath(`appData`),`CodexRebuildHome`);";
+  while (text.includes(rebuildHomeStart)) {
+    const start = text.indexOf(rebuildHomeStart);
+    const end = text.indexOf("process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);", start);
+    if (end < 0) break;
+    text = text.slice(0, start) + text.slice(end + "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);".length);
+  }
+  if (text.includes(mirrorExpr) && text.includes(marketplaceExpr)) return text;
   if (!text.includes(userDataExpr)) {
-    console.log("   [!] bootstrap CODEX_HOME insertion point not found");
+    console.log("   [!] bootstrap Codex home mirror insertion point not found");
     return text;
   }
-  console.log("   [identity] patched bootstrap CODEX_HOME isolation");
-  return text.replace(userDataExpr, `${codexHomeExpr}${userDataExpr}`);
+  console.log("   [identity] patched bootstrap CODEX_HOME mirror isolation");
+  return text.replace(userDataExpr, `${mirrorExpr}${userDataExpr}${text.includes(marketplaceExpr) ? "" : marketplaceExpr}`);
+}
+
+function getRebuildCodexHomeMirrorRuntimeSnippet() {
+  return `var __codexRebuildHome=r.join(require(\`node:os\`).homedir(),\`.codex\`);`;
 }
 
 function patchBootstrapAppUserModelOverride(text) {
@@ -373,6 +461,98 @@ function patchBootstrapAppUserModelOverride(text) {
   }
   console.log("   [identity] patched bootstrap AppUserModelID override");
   return text.replace(original, replacement);
+}
+
+function patchBootstrapRebuildUpdaterSkip(text) {
+  const original = "await i.initialize();try{";
+  const badReplacement = "r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`||await i.initialize();try{";
+  const replacement = "process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)||await i.initialize();try{";
+  text = text.replace(badReplacement, original);
+  if (text.includes(replacement)) return text;
+  if (!text.includes(original)) {
+    console.log("   [!] bootstrap updater skip pattern not found");
+    return text;
+  }
+  console.log("   [identity] patched bootstrap updater skip for CodexRebuild.exe");
+  return text.replace(original, replacement);
+}
+
+function patchRebuildWindowsImmediateExit(asarDir) {
+  const buildDir = path.join(asarDir, ".vite", "build");
+  if (!fs.existsSync(buildDir)) {
+    console.log("   [!] build dir not found for Rebuild Windows immediate exit patch");
+    return;
+  }
+  let patched = false;
+  for (const entry of fs.readdirSync(buildDir)) {
+    if (!/^main.*\.js$/.test(entry)) continue;
+    const filePath = path.join(buildDir, entry);
+    let text = fs.readFileSync(filePath, "utf-8");
+    const original = "te=()=>{MG({exitImmediately:E&&n.app.isPackaged,";
+    const replacement = "te=()=>{MG({exitImmediately:E&&n.app.isPackaged&&!process.execPath.toLowerCase().endsWith(`codexrebuild.exe`),";
+    if (text.includes(replacement)) {
+      patched = true;
+      continue;
+    }
+    if (!text.includes(original)) continue;
+    text = text.replace(original, replacement);
+    fs.writeFileSync(filePath, text, "utf-8");
+    patched = true;
+    console.log(`   [identity] patched Rebuild Windows immediate update exit in ${entry}`);
+  }
+  if (!patched) console.log("   [!] Rebuild Windows immediate exit pattern not found");
+}
+
+function patchRebuildChildProcessGoneFatal(asarDir) {
+  const buildDir = path.join(asarDir, ".vite", "build");
+  if (!fs.existsSync(buildDir)) {
+    console.log("   [!] build dir not found for Rebuild child-process-gone patch");
+    return;
+  }
+  let patched = false;
+  for (const entry of fs.readdirSync(buildDir)) {
+    if (!/^main.*\.js$/.test(entry)) continue;
+    const filePath = path.join(buildDir, entry);
+    let text = fs.readFileSync(filePath, "utf-8");
+    const original = "n.app.on(`child-process-gone`,(e,t)=>{if(t.reason!==`clean-exit`){";
+    const replacement = "n.app.on(`child-process-gone`,(e,t)=>{if(process.execPath.toLowerCase().endsWith(`codexrebuild.exe`))return;if(t.reason!==`clean-exit`){";
+    if (text.includes(replacement)) {
+      patched = true;
+      continue;
+    }
+    if (!text.includes(original)) continue;
+    text = text.replace(original, replacement);
+    fs.writeFileSync(filePath, text, "utf-8");
+    patched = true;
+    console.log(`   [identity] patched Rebuild child-process-gone fatal handler in ${entry}`);
+  }
+  if (!patched) console.log("   [!] Rebuild child-process-gone fatal pattern not found");
+}
+
+function patchRebuildBundledMarketplaceRoot(asarDir) {
+  const buildDir = path.join(asarDir, ".vite", "build");
+  if (!fs.existsSync(buildDir)) {
+    console.log("   [!] build dir not found for bundled marketplace patch");
+    return;
+  }
+  let patched = false;
+  for (const entry of fs.readdirSync(buildDir)) {
+    if (!/^main.*\.js$/.test(entry)) continue;
+    const filePath = path.join(buildDir, entry);
+    let text = fs.readFileSync(filePath, "utf-8");
+    const original = "function Ri(t){return(0,i.join)(t.codexHome,`.tmp`,`bundled-marketplaces`,t.marketplaceName??e.Mn)}";
+    const replacement = `function Ri(t){let n=(t.env??process.env).${REBUILD_BUNDLED_MARKETPLACE_ENV}?.trim();return n?(0,i.join)(n,t.marketplaceName??e.Mn):(0,i.join)(t.codexHome,\`.tmp\`,\`bundled-marketplaces\`,t.marketplaceName??e.Mn)}`;
+    if (text.includes(replacement)) {
+      patched = true;
+      continue;
+    }
+    if (!text.includes(original)) continue;
+    text = text.replace(original, replacement);
+    fs.writeFileSync(filePath, text, "utf-8");
+    patched = true;
+    console.log(`   [identity] patched Rebuild bundled marketplace root in ${entry}`);
+  }
+  if (!patched) console.log("   [!] bundled marketplace root pattern not found");
 }
 
 function ensureRebuildIcon() {
