@@ -19,6 +19,7 @@ const PATCHES = [
   "patch-plugin-auth.js",
   "patch-browser-trust-bridge.js",
   "patch-browser-tool-call-guidance.js",
+  "patch-heartbeat-automation-feature.js",
   "patch-gpu.js",
 ];
 

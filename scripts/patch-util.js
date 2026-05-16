@@ -65,11 +65,17 @@ function locateBundles({ dir, pattern, platform }) {
       continue;
     }
 
-    // For build dir with multiple matches, prefer hashed variant
-    const target =
-      files.length > 1 ? files.find((f) => f !== "main.js") || files[0] : files[0];
+    if (dir === "build") {
+      // For build dir with multiple matches, prefer hashed variant.
+      const target =
+        files.length > 1 ? files.find((f) => f !== "main.js") || files[0] : files[0];
+      results.push({ platform: plat, path: path.join(d, target) });
+      continue;
+    }
 
-    results.push({ platform: plat, path: path.join(d, target) });
+    for (const file of files) {
+      results.push({ platform: plat, path: path.join(d, file) });
+    }
   }
 
   return results;
