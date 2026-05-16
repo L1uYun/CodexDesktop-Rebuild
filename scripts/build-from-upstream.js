@@ -259,6 +259,7 @@ function buildWin(platform) {
   runPatchScript("patch-browser-use-js-repl-feature.js", "win");
   runPatchScript("patch-browser-tool-call-guidance.js");
   runPatchScript("patch-heartbeat-automation-feature.js", "win");
+  runPatchScript("patch-archived-chats-local-fallback.js", "win");
 
   // Copy synced Windows resources to output.
   const outAppDir = path.join(OUT_DIR, "win");

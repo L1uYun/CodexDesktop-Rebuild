@@ -26,6 +26,8 @@ After every official Codex update, Rebuild should:
 - Preserve the Windows path preflight for stale `C:\...` versus `\\?\C:\...`
   thread paths.
 - Keep automation gates and Chrome/browser-use trust patches applied.
+- Keep Archived chats usable from local `archived_sessions` when ChatGPT cloud
+  task history is unreachable.
 - Keep CodexPlusPlus watcher in observe-only mode by default.
 
 ## Official App Discovery
@@ -191,6 +193,7 @@ Build output should apply:
 
 - `scripts/patch-heartbeat-automation-feature.js`
 - `scripts/patch-rebuild-windows-thread-path-preflight.js`
+- `scripts/patch-archived-chats-local-fallback.js`
 
 Expected build log lines include:
 
@@ -214,6 +217,34 @@ paths and create SQLite triggers:
 
 - `codex_rebuild_threads_rollout_path_win_ext_ai`
 - `codex_rebuild_threads_rollout_path_win_ext_au`
+
+## Archived Chats Verification
+
+Build output should apply:
+
+```text
+archived chats local fallback patched
+```
+
+The Settings > Archived chats page combines cloud archived tasks from:
+
+```text
+/wham/tasks/list?task_filter=archived
+```
+
+and local archived threads from:
+
+```text
+%USERPROFILE%\.codex\archived_sessions
+```
+
+If the cloud request fails with `ERR_CONNECTION_RESET`, Rebuild should treat the
+cloud page as empty and still show local archived chats. Without this patch, the
+cloud query error hides the local archived threads behind:
+
+```text
+Could not load archived chats.
+```
 
 ## Chrome / Browser-Use Verification
 
