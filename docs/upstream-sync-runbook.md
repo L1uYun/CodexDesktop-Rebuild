@@ -194,6 +194,7 @@ Build output should apply:
 - `scripts/patch-heartbeat-automation-feature.js`
 - `scripts/patch-rebuild-windows-thread-path-preflight.js`
 - `scripts/patch-archived-chats-local-fallback.js`
+- `scripts/patch-local-thread-item-guards.js`
 
 Expected build log lines include:
 
@@ -224,6 +225,7 @@ Build output should apply:
 
 ```text
 archived chats local fallback patched
+local thread item guards patched
 ```
 
 The Settings > Archived chats page combines cloud archived tasks from:
