@@ -5,15 +5,19 @@
  * The renderer can mention the Chrome plugin while desktop feature availability
  * still reports browser-use as unavailable. In that state the main process does
  * not generate the node_repl MCP server config, so @chrome never becomes a
- * callable tool. The native-pipe bridge is also keyed only from
- * inAppBrowserUse upstream, while Chrome uses externalBrowserUse. Rebuild keeps
- * the upstream gate for official Codex.exe and only forces Chrome browser-use
- * when running as CodexRebuild.exe on Windows.
+ * callable tool. The bundled marketplace reconciler can also omit the Chrome
+ * plugin from the runtime marketplace, so the session has no plugin MCP entry
+ * to install. The native-pipe bridge is also keyed only from inAppBrowserUse
+ * upstream, while Chrome uses externalBrowserUse. Rebuild keeps the upstream
+ * gate for official Codex.exe and only forces Chrome browser-use when running
+ * as CodexRebuild.exe on Windows.
  */
 const fs = require("fs");
 const { locateBundles, relPath } = require("./patch-util");
 
 function patchSource(source) {
+  const reconcileOriginal = "function ea(t){let n=t.env??process.env,r=t.resourcesPath??Zi({env:n}),i=e.bn(t.buildFlavor),a=t.runtimeMarketplaceRoot??Qi({codexHome:t.codexHome,marketplaceName:i}),o=$i({env:n}),s=t.platform??process.platform,c=null,l=null,u=Promise.resolve(),d=e=>ti.filter(r=>r.isAvailable({buildFlavor:t.buildFlavor,env:n,features:e,platform:s})),f=()=>{if(c==null)return u;let e=d(c),t=e.map(e=>e.name),n=JSON.stringify({marketplacePluginNames:t});";
+  const reconcileReplacement = "function ea(t){let n=t.env??process.env,r=t.resourcesPath??Zi({env:n}),i=e.bn(t.buildFlavor),a=t.runtimeMarketplaceRoot??Qi({codexHome:t.codexHome,marketplaceName:i}),o=$i({env:n}),s=t.platform??process.platform,c=null,l=null,u=Promise.resolve(),d=e=>(s===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(e={...e,externalBrowserUse:!0,externalBrowserUseAllowed:!0}),ti.filter(r=>r.isAvailable({buildFlavor:t.buildFlavor,env:n,features:e,platform:s}))),f=()=>{if(c==null)return u;let e=d(c),t=e.map(e=>e.name),n=JSON.stringify({marketplacePluginNames:t});";
   const availabilityOriginal = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
   const availabilityReplacement = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){d===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(t={...t,externalBrowserUse:!0,externalBrowserUseAllowed:!0});let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
   const availabilityOriginalV2 = "async function Zt({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=nt}){let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=rn(t);if(!p&&!m)return null;";
@@ -22,10 +26,21 @@ function patchSource(source) {
   const pipeReplacement = "function $e({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{(t.inAppBrowserUse!=null||t.externalBrowserUse!=null)&&e(t.inAppBrowserUse||t.externalBrowserUse)},dispose:()=>{e(!1)}}}";
   const pipeOriginalV2 = "function tt({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{t.inAppBrowserUse!=null&&e(t.inAppBrowserUse)},dispose:()=>{e(!1)}}}";
   const pipeReplacementV2 = "function tt({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{(t.inAppBrowserUse!=null||t.externalBrowserUse!=null)&&e(t.inAppBrowserUse||t.externalBrowserUse)},dispose:()=>{e(!1)}}}";
+  const chromeForceReloadOriginal = "{forceReload:!0,name:dt,isAvailable:({buildFlavor:e,features:t})=>t.externalBrowserUseAllowed&&sr(e)}";
+  const chromeForceReloadReplacement = "{forceReload:!(process.platform===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)),name:dt,isAvailable:({buildFlavor:e,features:t})=>t.externalBrowserUseAllowed&&sr(e)}";
 
   let next = source;
   const changes = [];
   const missing = [];
+
+  if (next.includes(reconcileReplacement)) {
+    changes.push("bundled marketplace reconcile already patched");
+  } else if (next.includes(reconcileOriginal)) {
+    next = next.replace(reconcileOriginal, reconcileReplacement);
+    changes.push("forced Rebuild Chrome bundled marketplace reconcile");
+  } else {
+    missing.push("bundled marketplace reconcile pattern not found");
+  }
 
   if (next.includes(availabilityReplacement)) {
     changes.push("availability already patched");
@@ -53,6 +68,15 @@ function patchSource(source) {
     changes.push("enabled native pipe for external browser-use");
   } else {
     missing.push("browser-use native pipe pattern not found");
+  }
+
+  if (next.includes(chromeForceReloadReplacement)) {
+    changes.push("Chrome force reload already patched");
+  } else if (next.includes(chromeForceReloadOriginal)) {
+    next = next.replace(chromeForceReloadOriginal, chromeForceReloadReplacement);
+    changes.push("disabled Rebuild Chrome forced reload on Windows");
+  } else {
+    missing.push("Chrome force reload pattern not found");
   }
 
   if (missing.length > 0) {

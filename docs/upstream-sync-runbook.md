@@ -235,6 +235,13 @@ browser-use feature availability patched
 browser-use js_repl feature patched
 ```
 
+For Rebuild on Windows, `scripts/patch-browser-use-feature-availability.js`
+must also disable forced reload for the bundled `chrome` plugin. The official
+descriptor marks `chrome` with `forceReload: true`; when official Codex or the
+Chrome extension native host is already using the shared
+`%USERPROFILE%\.codex\plugins\cache\openai-bundled\chrome\latest` tree, a forced
+uninstall/install can fail before the plugin reaches MCP registration.
+
 If `@chrome` still reports a trust error:
 
 ```text
@@ -258,6 +265,39 @@ node scripts\patch-plugins-experience-feature.js win --check
 The check should report the `apps feature gate` and `plugins feature lookup` as
 already patched or patchable. If it reports a missing pattern, inspect the new
 `agent-settings-*.js` bundle before publishing Rebuild.
+
+If the runtime marketplace is written with `browser`, `chrome`, and `latex`, but
+`@chrome` still does not appear as a callable MCP tool, inspect
+`%APPDATA%\CodexRebuild\sentry\scope_v3.json` for install failures:
+
+```powershell
+Select-String -Path "$env:APPDATA\CodexRebuild\sentry\scope_v3.json" `
+  -Pattern "bundled_plugins_marketplace_install_failed|plugin_cache_windows_file_lock|pluginName=chrome" |
+  Select-Object -Last 30
+```
+
+This signature means the plugin was discovered but failed during cache install:
+
+```text
+plugin_cache_windows_file_lock
+failed to back up plugin cache entry: 拒绝访问。 (os error 5)
+```
+
+Check for the native host that locks the shared Chrome plugin cache:
+
+```powershell
+Get-CimInstance Win32_Process |
+  Where-Object {
+    $_.CommandLine -match "\\.codex\\plugins\\cache\\openai-bundled\\chrome|extension-host"
+  } |
+  Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CommandLine |
+  Format-List
+```
+
+If only the Chrome extension host remains, closing Chrome or stopping that
+`extension-host.exe` process releases the lock for validation. The permanent
+Rebuild fix is to avoid forced reload of the current `chrome` cache on Windows,
+so a running official Codex/Chrome bridge does not prevent MCP registration.
 
 ## Failure Signatures
 
