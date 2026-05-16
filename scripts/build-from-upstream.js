@@ -253,6 +253,8 @@ function buildWin(platform) {
 
   runPatchScript("patch-browser-client-discovery-timeout.js", "win");
   runPatchScript("patch-browser-trust-bridge.js", "win");
+  runPatchScript("patch-plugin-auth.js", "win");
+  runPatchScript("patch-plugins-experience-feature.js", "win");
   runPatchScript("patch-browser-use-feature-availability.js", "win");
   runPatchScript("patch-browser-use-js-repl-feature.js", "win");
   runPatchScript("patch-browser-tool-call-guidance.js");

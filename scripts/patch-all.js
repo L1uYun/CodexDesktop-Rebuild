@@ -17,6 +17,7 @@ const PATCHES = [
   "patch-devtools.js",
   "patch-fast-mode.js",
   "patch-plugin-auth.js",
+  "patch-plugins-experience-feature.js",
   "patch-browser-trust-bridge.js",
   "patch-browser-tool-call-guidance.js",
   "patch-heartbeat-automation-feature.js",

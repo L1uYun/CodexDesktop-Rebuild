@@ -90,10 +90,16 @@ Get-Process -ErrorAction SilentlyContinue |
 
 Start-Sleep -Seconds 2
 if (Test-Path $target) { Remove-Item $target -Recurse -Force }
-Copy-Item $src $target -Recurse
+New-Item -ItemType Directory -Force -Path $target | Out-Null
+robocopy $src $target /E /R:2 /W:1 /NFL /NDL /NJH /NJS /NP
+if ($LASTEXITCODE -ge 8) { throw "robocopy failed: $LASTEXITCODE" }
 
 & "$target\resources\codex-rebuild.exe" --version
 ```
+
+Use `robocopy` for the install copy. Plain `Copy-Item -Recurse` has failed on
+the vendored plugin `node_modules` tree with transient "Could not find a part of
+the path" errors, leaving `D:\software\CodexRebuild` half-installed.
 
 The CLI version should match the official app bundle. For the 2026-05-16 sync it
 was:
@@ -214,6 +220,8 @@ paths and create SQLite triggers:
 Build output should apply:
 
 - `scripts/patch-browser-trust-bridge.js`
+- `scripts/patch-plugin-auth.js`
+- `scripts/patch-plugins-experience-feature.js`
 - `scripts/patch-browser-use-feature-availability.js`
 - `scripts/patch-browser-use-js-repl-feature.js`
 - `scripts/patch-browser-client-discovery-timeout.js`
@@ -222,6 +230,7 @@ Expected build log lines include:
 
 ```text
 browser trust bridge patched
+plugins experience feature patched
 browser-use feature availability patched
 browser-use js_repl feature patched
 ```
@@ -236,6 +245,19 @@ first confirm that the installed ASAR contains the patched browser-use flags and
 that Rebuild was rebuilt from the newest official ASAR. Do not debug this by
 falling back to a random Chrome CDP port; that bypasses the trust bridge being
 validated.
+
+If the Plugins page or settings row disappears, appears locked, or `@chrome`
+never becomes a selectable plugin after an official update, check the upstream
+experimental feature gate. Official `26.513.3673.0` made Plugins depend on the
+`apps` experimental feature. Re-run the build/install path and confirm:
+
+```powershell
+node scripts\patch-plugins-experience-feature.js win --check
+```
+
+The check should report the `apps feature gate` and `plugins feature lookup` as
+already patched or patchable. If it reports a missing pattern, inspect the new
+`agent-settings-*.js` bundle before publishing Rebuild.
 
 ## Failure Signatures
 
@@ -313,4 +335,3 @@ Push to the user fork:
 ```powershell
 git push mine master
 ```
-
