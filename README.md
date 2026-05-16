@@ -44,6 +44,13 @@ npm run build:all
 npm run dev
 ```
 
+## Upstream Sync
+
+When the official Codex app updates, follow the Windows sync runbook in
+[`docs/upstream-sync-runbook.md`](docs/upstream-sync-runbook.md). It captures the
+runtime-copy, ASAR integrity, automation, Chrome/browser-use, and CodexPlusPlus
+watcher checks needed to reproduce this Rebuild sync safely.
+
 ## CodexRebuild++
 
 The `CodexPlusPlus/` directory vendors the Codex++ launcher and helper service so the Rebuild package and the PlusPlus integration can be versioned together in this repository.
