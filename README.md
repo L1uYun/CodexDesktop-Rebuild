@@ -6,6 +6,7 @@ This project is derived from two upstream projects:
 
 - [OpenAI Codex](https://github.com/openai/codex), the original Codex CLI and runtime.
 - [Haleclipse/CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild), the cross-platform desktop rebuild baseline.
+- [BigPizzaV3/CodexPlusPlus](https://github.com/BigPizzaV3/CodexPlusPlus), the external Codex++ enhancement launcher included under `CodexPlusPlus/`.
 
 This fork keeps the upstream rebuild workflow and adds Windows-focused Rebuild identity packaging, a separate `CodexRebuild.exe` launcher, and a narrow browser-use trust bridge based on the official `browser-client.mjs` SHA-256 allowlist.
 
@@ -41,12 +42,25 @@ npm run build:all
 
 ```bash
 npm run dev
-npm run check:browser-trust
+```
+
+## CodexRebuild++
+
+The `CodexPlusPlus/` directory vendors the Codex++ launcher and helper service so the Rebuild package and the PlusPlus integration can be versioned together in this repository.
+
+For current Rebuild builds, the PlusPlus watcher runs in observe-only mode by default. It no longer kills a normally started `CodexRebuild.exe` and relaunches it with `--remote-debugging-port`, which prevents the startup loop that made Rebuild appear to flash, hang, and close. Manual PlusPlus launch/injection is still available from the `CodexPlusPlus/` project.
+
+To intentionally restore watcher takeover behavior for debugging, set:
+
+```powershell
+$env:CODEX_PLUS_PLUS_WATCHER_TAKEOVER = "1"
+python -m codex_session_delete watch --debug-port 9239
 ```
 
 ## Project Structure
 
 ```
+├── CodexPlusPlus/       # Vendored Codex++ integration
 ├── src/
 │   ├── .vite/build/     # Main process (Electron)
 │   └── webview/         # Renderer (Frontend)
@@ -72,6 +86,7 @@ GitHub Actions automatically builds on:
 
 - [OpenAI Codex](https://github.com/openai/codex) - Original Codex CLI and runtime (Apache-2.0)
 - [Haleclipse/CodexDesktop-Rebuild](https://github.com/Haleclipse/CodexDesktop-Rebuild) - Original cross-platform desktop rebuild project
+- [BigPizzaV3/CodexPlusPlus](https://github.com/BigPizzaV3/CodexPlusPlus) - Original Codex++ external enhancement launcher
 - [Cometix Space](https://github.com/Haleclipse) - [@cometix/codex](https://www.npmjs.com/package/@cometix/codex) binaries
 - [Electron Forge](https://www.electronforge.io/) - Build toolchain
 

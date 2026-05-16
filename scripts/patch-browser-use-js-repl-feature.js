@@ -15,6 +15,8 @@ const AVAILABILITY_PATCH_MARKER =
   "process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(t={...t,externalBrowserUse:!0,externalBrowserUseAllowed:!0})";
 const ORIGINAL = 'Bt={"features.js_repl":!1}';
 const REPLACEMENT = 'Bt={"features.js_repl":!0}';
+const ORIGINAL_V2 = 'Yt={"features.js_repl":!1}';
+const REPLACEMENT_V2 = 'Yt={"features.js_repl":!0}';
 
 function patchSource(source) {
   if (!source.includes(AVAILABILITY_PATCH_MARKER)) {
@@ -25,10 +27,24 @@ function patchSource(source) {
       reason: "Rebuild browser-use availability patch marker not found",
     };
   }
-  if (source.includes(REPLACEMENT)) {
+  if (source.includes(REPLACEMENT) || source.includes(REPLACEMENT_V2)) {
     return { source, changed: false, reason: "already patched" };
   }
-  if (!source.includes(ORIGINAL)) {
+  if (source.includes(ORIGINAL)) {
+    return {
+      source: source.replace(ORIGINAL, REPLACEMENT),
+      changed: true,
+      reason: "enabled Rebuild browser-use js_repl tool flag",
+    };
+  }
+  if (source.includes(ORIGINAL_V2)) {
+    return {
+      source: source.replace(ORIGINAL_V2, REPLACEMENT_V2),
+      changed: true,
+      reason: "enabled Rebuild browser-use js_repl tool flag",
+    };
+  }
+  {
     return {
       source,
       changed: false,
@@ -36,11 +52,6 @@ function patchSource(source) {
       reason: "browser-use js_repl feature pattern not found",
     };
   }
-  return {
-    source: source.replace(ORIGINAL, REPLACEMENT),
-    changed: true,
-    reason: "enabled Rebuild browser-use js_repl tool flag",
-  };
 }
 
 function main() {

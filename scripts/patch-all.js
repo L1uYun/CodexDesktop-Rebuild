@@ -20,6 +20,7 @@ const PATCHES = [
   "patch-browser-trust-bridge.js",
   "patch-browser-tool-call-guidance.js",
   "patch-heartbeat-automation-feature.js",
+  "patch-rebuild-windows-thread-path-preflight.js",
   "patch-gpu.js",
 ];
 

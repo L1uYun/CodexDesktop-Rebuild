@@ -57,6 +57,50 @@ function copyRecursive(src, dest) {
   return count;
 }
 
+function getExactChildPath(dir, childName) {
+  if (!fs.existsSync(dir)) return null;
+  const match = fs.readdirSync(dir).find((name) => name === childName);
+  return match ? path.join(dir, match) : null;
+}
+
+function findInstalledOfficialWindowsAppDir() {
+  const envDir = process.env.CODEX_OFFICIAL_APP_DIR;
+  if (envDir && fs.existsSync(path.join(envDir, "Codex.exe"))) return envDir;
+
+  const windowsApps = path.join(process.env.ProgramFiles || "C:\\Program Files", "WindowsApps");
+  if (!fs.existsSync(windowsApps)) return null;
+  let candidates = [];
+  try {
+    candidates = fs.readdirSync(windowsApps)
+      .filter((name) => /^OpenAI\.Codex_\d+\.\d+\.\d+\.\d+_x64__/.test(name))
+      .sort()
+      .reverse();
+  } catch {
+    return null;
+  }
+  for (const name of candidates) {
+    const appDir = path.join(windowsApps, name, "app");
+    if (fs.existsSync(path.join(appDir, "Codex.exe"))) return appDir;
+  }
+  return null;
+}
+
+function findWindowsElectronLauncher(platformDir) {
+  const syncedLauncher = getExactChildPath(platformDir, "Codex.exe");
+  if (syncedLauncher) return syncedLauncher;
+
+  const installedAppDir = findInstalledOfficialWindowsAppDir();
+  if (installedAppDir) return path.join(installedAppDir, "Codex.exe");
+
+  return null;
+}
+
+function findWindowsOfficialAppDirForRuntime(platformDir) {
+  const launcher = getExactChildPath(platformDir, "Codex.exe");
+  if (launcher) return platformDir;
+  return findInstalledOfficialWindowsAppDir();
+}
+
 function resolveCodexVendor(platform) {
   const triple = TARGET_TRIPLE_MAP[platform];
   if (!triple) return null;
@@ -222,8 +266,29 @@ function buildWin(platform) {
   copyWindowsResources(platformDir, outApp);
 
   const resourcesDir = path.join(outApp, "resources");
+  const officialLauncherPath = findWindowsElectronLauncher(platformDir);
+  if (!officialLauncherPath) {
+    console.error("[x] Windows Electron launcher Codex.exe not found. Set CODEX_OFFICIAL_APP_DIR to the official app directory.");
+    process.exit(1);
+  }
+  const officialAppDir = findWindowsOfficialAppDirForRuntime(platformDir);
+  const originalAsarPath = officialAppDir ? path.join(officialAppDir, "resources", "app.asar") : null;
+  if (originalAsarPath && fs.existsSync(originalAsarPath)) {
+    fs.copyFileSync(originalAsarPath, path.join(resourcesDir, "app.asar"));
+  }
+  if (officialAppDir) {
+    copyWindowsRuntimeRoot(officialAppDir, outApp);
+    console.log(`   [copy] Windows Electron runtime root: ${officialAppDir}`);
+  } else {
+    console.log("   [!] Windows Electron runtime root not found; launcher may not start");
+  }
+  const outOfficialLauncherPath = path.join(outApp, "Codex.exe");
+  fs.copyFileSync(officialLauncherPath, outOfficialLauncherPath);
+  console.log(`   [exe] using Windows Electron launcher: ${officialLauncherPath}`);
+
   patchRebuildAsarMetadata(asarDir);
   patchRebuildBootstrap(asarDir);
+  runPatchScript("patch-rebuild-windows-thread-path-preflight.js", "win");
   patchRebuildWindowsImmediateExit(asarDir);
   patchRebuildChildProcessGoneFatal(asarDir);
   patchRebuildBundledMarketplaceRoot(asarDir);
@@ -231,9 +296,8 @@ function buildWin(platform) {
   patchRebuildResourceIcons(resourcesDir);
 
   const rebuildExePath = path.join(outApp, REBUILD_EXE_NAME);
-  const upstreamExePath = path.join(outApp, "Codex.exe");
-  if (fs.existsSync(upstreamExePath)) {
-    fs.copyFileSync(upstreamExePath, rebuildExePath);
+  if (fs.existsSync(outOfficialLauncherPath)) {
+    fs.copyFileSync(outOfficialLauncherPath, rebuildExePath);
     patchRebuildExeResources(rebuildExePath);
     console.log("   [exe] added CodexRebuild.exe launcher");
   } else {
@@ -272,7 +336,9 @@ function buildWin(platform) {
     }
   }
 
-  // Add rebuilt codex CLI without replacing upstream codex.exe
+  // Add a Rebuild-named CLI next to the upstream CLI. Keep it version-matched
+  // with the official desktop app because the app-server protocol is coupled
+  // to the Electron bundle.
   addRebuildCodex(platform, resourcesDir, REBUILD_CLI_NAME);
 
   // Create ZIP
@@ -327,10 +393,22 @@ function copyWindowsResources(srcDir, outApp) {
   }
 }
 
+function copyWindowsRuntimeRoot(appDir, outApp) {
+  for (const entry of fs.readdirSync(appDir, { withFileTypes: true })) {
+    if (entry.name === "resources") continue;
+    const sourcePath = path.join(appDir, entry.name);
+    const targetPath = path.join(outApp, entry.name);
+    if (entry.isDirectory()) {
+      copyRecursive(sourcePath, targetPath);
+    } else if (!entry.isSymbolicLink()) {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+}
+
 function isWindowsRootResource(name) {
   return [
     "Codex.exe",
-    "codex.exe",
     "icon.ico",
     "chrome_100_percent.pak",
     "chrome_200_percent.pak",
@@ -402,8 +480,11 @@ function patchRebuildBootstrap(asarDir) {
   const marker = "process.platform===`win32`&&r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`";
   if (text.includes(marker)) {
     text = patchBootstrapCodexHomeMirror(text);
+    text = patchBootstrapWindowsStatePathPreflight(text);
     text = patchBootstrapRebuildRuntimeEnv(text);
+    text = patchBootstrapRebuildLifecycleTrace(text);
     text = patchBootstrapAppUserModelOverride(text);
+    text = patchBootstrapRebuildProductNameOverride(text);
     text = patchBootstrapRebuildUpdaterSkip(text);
     fs.writeFileSync(bootstrapPath, text, "utf-8");
     console.log("   [identity] bootstrap Rebuild isolation already present");
@@ -428,8 +509,11 @@ function patchRebuildBootstrap(asarDir) {
     `}`,
   ].join("");
   text = text.replace(needle, injection);
+  text = patchBootstrapWindowsStatePathPreflight(text);
   text = patchBootstrapRebuildRuntimeEnv(text);
+  text = patchBootstrapRebuildLifecycleTrace(text);
   text = patchBootstrapAppUserModelOverride(text);
+  text = patchBootstrapRebuildProductNameOverride(text);
   text = patchBootstrapRebuildUpdaterSkip(text);
   fs.writeFileSync(bootstrapPath, text, "utf-8");
   console.log("   [identity] injected Rebuild userData/AppUserModelID bootstrap patch");
@@ -438,7 +522,7 @@ function patchRebuildBootstrap(asarDir) {
 function patchBootstrapCodexHomeMirror(text) {
   const legacyCodexHomeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=r.join(n.app.getPath(`appData`),`CodexRebuildHome`));";
   const userDataExpr = "process.env.CODEX_ELECTRON_USER_DATA_PATH||(process.env.CODEX_ELECTRON_USER_DATA_PATH=r.join(n.app.getPath(`appData`),`CodexRebuild`));";
-  const mirrorExpr = `${getRebuildCodexHomeMirrorRuntimeSnippet()}process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);`;
+  const mirrorExpr = `${getRebuildCodexHomeMirrorRuntimeSnippet()}${getRebuildWindowsStatePathPreflightRuntimeSnippet()}process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);`;
   const marketplaceExpr = `process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}||(process.env.${REBUILD_BUNDLED_MARKETPLACE_ENV}=r.join(n.app.getPath(\`appData\`),\`CodexRebuild\`,\`bundled-marketplaces\`));`;
   text = text.replace(legacyCodexHomeExpr, "");
   const rebuildHomeStart = "var __codexRebuildFs=require(`node:fs`),__codexRebuildSourceHome=r.join(require(`node:os`).homedir(),`.codex`),__codexRebuildHome=r.join(n.app.getPath(`appData`),`CodexRebuildHome`);";
@@ -447,6 +531,16 @@ function patchBootstrapCodexHomeMirror(text) {
     const end = text.indexOf("process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);", start);
     if (end < 0) break;
     text = text.slice(0, start) + text.slice(end + "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);".length);
+  }
+  const currentHomeExpr = getRebuildCodexHomeMirrorRuntimeSnippet();
+  const codeHomeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  if (text.includes(currentHomeExpr) && text.includes(codeHomeExpr)) {
+    if (text.includes(marketplaceExpr)) return text;
+    if (!text.includes(userDataExpr)) {
+      console.log("   [!] bootstrap marketplace insertion point not found");
+      return text;
+    }
+    return text.replace(userDataExpr, `${marketplaceExpr}${userDataExpr}`);
   }
   if (text.includes(mirrorExpr) && text.includes(marketplaceExpr)) return text;
   if (!text.includes(userDataExpr)) {
@@ -459,6 +553,31 @@ function patchBootstrapCodexHomeMirror(text) {
 
 function getRebuildCodexHomeMirrorRuntimeSnippet() {
   return `var __codexRebuildHome=r.join(require(\`node:os\`).homedir(),\`.codex\`);`;
+}
+
+function getRebuildWindowsStatePathPreflightRuntimeSnippet() {
+  return `if(!process.env.CODEX_REBUILD_STATE_PATH_PREFLIGHT_DONE){process.env.CODEX_REBUILD_STATE_PATH_PREFLIGHT_DONE=\`1\`;try{let e=require(\`node:fs\`),t=require(\`node:path\`),i=t.join(__codexRebuildHome,\`state_5.sqlite\`);if(e.existsSync(i)){let e=require(\`better-sqlite3\`),n=new e(i),a=s=>typeof s==\`string\`&&/^[A-Za-z]:\\\\/.test(s)&&!s.startsWith(\`\\\\\\\\?\\\\\`)?\`\\\\\\\\?\\\\\`+s:s,o=n.prepare(\`update threads set rollout_path = ? where id = ?\`),c=n.prepare(\`update threads set cwd = ? where id = ?\`),l=0;n.exec(\`CREATE TRIGGER IF NOT EXISTS codex_rebuild_threads_rollout_path_win_ext_ai AFTER INSERT ON threads WHEN length(NEW.rollout_path) > 3 AND substr(NEW.rollout_path,2,2) = ':\\\\' AND substr(NEW.rollout_path,1,4) != '\\\\\\\\?\\\\' BEGIN UPDATE threads SET rollout_path = '\\\\\\\\?\\\\' || NEW.rollout_path WHERE id = NEW.id; END;CREATE TRIGGER IF NOT EXISTS codex_rebuild_threads_rollout_path_win_ext_au AFTER UPDATE OF rollout_path ON threads WHEN length(NEW.rollout_path) > 3 AND substr(NEW.rollout_path,2,2) = ':\\\\' AND substr(NEW.rollout_path,1,4) != '\\\\\\\\?\\\\' BEGIN UPDATE threads SET rollout_path = '\\\\\\\\?\\\\' || NEW.rollout_path WHERE id = NEW.id; END;\`);n.transaction(()=>{for(let e of n.prepare(\`select id, rollout_path, cwd from threads where archived = 0\`).iterate()){let t=a(e.rollout_path);t!==e.rollout_path&&(o.run(t,e.id),l++);let n=a(e.cwd);n!==e.cwd&&(c.run(n,e.id),l++)}})();l>0&&console.log(\`[rebuild] normalized Windows thread paths: \${l}\`);n.close()}}catch(e){console.warn(\`[rebuild] Windows thread path preflight failed\`,e)}}`;
+}
+
+function patchBootstrapWindowsStatePathPreflight(text) {
+  const preflightExpr = getRebuildWindowsStatePathPreflightRuntimeSnippet();
+  if (text.includes("CODEX_REBUILD_STATE_PATH_PREFLIGHT_DONE")) {
+    if (text.includes("codex_rebuild_threads_rollout_path_win_ext_ai")) return text;
+    const start = text.indexOf("if(!process.env.CODEX_REBUILD_STATE_PATH_PREFLIGHT_DONE){");
+    const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+    const end = text.indexOf(homeExpr, start);
+    if (start >= 0 && end > start) {
+      console.log("   [identity] upgraded Rebuild Windows thread path preflight");
+      return `${text.slice(0, start)}${preflightExpr}${text.slice(end)}`;
+    }
+  }
+  const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  if (!text.includes(homeExpr)) {
+    console.log("   [!] bootstrap Windows state path preflight insertion point not found");
+    return text;
+  }
+  console.log("   [identity] patched Rebuild Windows thread path preflight");
+  return text.replace(homeExpr, `${preflightExpr}${homeExpr}`);
 }
 
 function getRebuildRuntimeEnvSnippet() {
@@ -477,15 +596,50 @@ function patchBootstrapRebuildRuntimeEnv(text) {
   return text.replace(homeExpr, `${runtimeExpr}${homeExpr}`);
 }
 
+function getRebuildLifecycleTraceRuntimeSnippet() {
+  return `try{let e=require(\`node:fs\`),t=require(\`node:path\`),i=t.join(n.app.getPath(\`appData\`),\`CodexRebuild\`,\`rebuild-lifecycle.log\`),a=(...n)=>{try{e.mkdirSync(t.dirname(i),{recursive:!0});e.appendFileSync(i,new Date().toISOString()+\` \`+n.map(e=>typeof e==\`string\`?e:JSON.stringify(e)).join(\` \`)+\`\\n\`)}catch{}};globalThis.__codexRebuildTrace=a;a(\`trace-installed\`,\`execPath=\${process.execPath}\`,\`argv=\${JSON.stringify(process.argv)}\`,\`ppid=\${process.ppid}\`);let o=n.app.exit.bind(n.app),s=n.app.quit.bind(n.app);n.app.exit=(...e)=>(a(\`app.exit\`,e,new Error().stack),o(...e));n.app.quit=(...e)=>(a(\`app.quit\`,e,new Error().stack),s(...e));n.app.on(\`ready\`,()=>a(\`ready\`));n.app.on(\`browser-window-created\`,()=>a(\`browser-window-created\`));n.app.on(\`second-instance\`,(e,t)=>a(\`second-instance\`,JSON.stringify(t)));n.app.on(\`before-quit\`,()=>a(\`before-quit\`));n.app.on(\`will-quit\`,()=>a(\`will-quit\`));n.app.on(\`window-all-closed\`,()=>a(\`window-all-closed\`));process.on(\`exit\`,e=>a(\`process.exit-event\`,String(e)));process.on(\`beforeExit\`,e=>a(\`process.beforeExit\`,String(e)));process.on(\`uncaughtException\`,e=>a(\`uncaughtException\`,e&&e.stack||String(e)));process.on(\`unhandledRejection\`,e=>a(\`unhandledRejection\`,e&&e.stack||String(e)))}catch{}`;
+}
+
+function patchBootstrapRebuildLifecycleTrace(text) {
+  const traceExpr = getRebuildLifecycleTraceRuntimeSnippet();
+  if (text.includes("rebuild-lifecycle.log") && text.includes("browser-window-created")) return text;
+  const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  if (!text.includes(homeExpr)) {
+    console.log("   [!] bootstrap lifecycle trace insertion point not found");
+    return text;
+  }
+  console.log("   [identity] patched Rebuild lifecycle trace");
+  return text.replace(homeExpr, `${traceExpr}${homeExpr}`);
+}
+
 function patchBootstrapAppUserModelOverride(text) {
   const original = "process.platform===`win32`&&n.app.setAppUserModelId(t.b(x));";
   const replacement = "process.platform===`win32`&&n.app.setAppUserModelId(r.basename(process.execPath).toLowerCase()===`codexrebuild.exe`?`com.openai.codex.rebuild`:t.b(x));";
+  const originalV2 = "process.platform===`win32`&&n.app.setAppUserModelId(t.S(x));";
+  const replacementV2 = "process.platform===`win32`&&n.app.setAppUserModelId(process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)?`com.openai.codex.rebuild`:t.S(x));";
   if (text.includes(replacement)) return text;
+  if (text.includes(replacementV2)) return text;
+  if (text.includes(originalV2)) {
+    console.log("   [identity] patched bootstrap AppUserModelID override");
+    return text.replace(originalV2, replacementV2);
+  }
   if (!text.includes(original)) {
     console.log("   [!] bootstrap AppUserModelID override pattern not found");
     return text;
   }
   console.log("   [identity] patched bootstrap AppUserModelID override");
+  return text.replace(original, replacement);
+}
+
+function patchBootstrapRebuildProductNameOverride(text) {
+  const original = "n.app.setName(e.G(x)),n.app.setPath(`userData`,";
+  const replacement = "n.app.setName(process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)?`Codex Rebuild`:e.G(x)),n.app.setPath(`userData`,";
+  if (text.includes(replacement)) return text;
+  if (!text.includes(original)) {
+    console.log("   [!] bootstrap product name override pattern not found");
+    return text;
+  }
+  console.log("   [identity] patched bootstrap product name override");
   return text.replace(original, replacement);
 }
 
@@ -647,6 +801,15 @@ function replaceCodex(platform, resourcesDir, binName) {
 }
 
 function addRebuildCodex(platform, resourcesDir, binName) {
+  const upstream = path.join(resourcesDir, platform === "win" ? "codex.exe" : "codex");
+  if (fs.existsSync(upstream)) {
+    const dest = path.join(resourcesDir, binName);
+    fs.copyFileSync(upstream, dest);
+    try { fs.chmodSync(dest, 0o755); } catch {}
+    console.log(`   [codex] added ${binName} from upstream app CLI`);
+    return;
+  }
+
   const vendor = resolveCodexVendor(platform);
   if (vendor) {
     const dest = path.join(resourcesDir, binName);

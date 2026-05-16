@@ -12,6 +12,7 @@ const INFO_TIMEOUT_MS = 3000;
 function browserClientPathsForPluginRoot(pluginRoot) {
   return [
     path.join(pluginRoot, "chrome", "scripts", "browser-client.mjs"),
+    path.join(pluginRoot, "browser", "scripts", "browser-client.mjs"),
     path.join(pluginRoot, "browser-use", "scripts", "browser-client.mjs"),
   ];
 }
@@ -20,7 +21,7 @@ function patchSource(source) {
   const original = "async function _O(t,e){let r=null,n=\"pipe-connect\";try{let o=await kc.create(t);r=e(o),n=\"backend-info-request\";let i=await r.getInfo(),s=await LS(i).catch(a=>(ee(a),i));return{browser:{id:crypto.randomUUID().substring(8),api:r,info:xO(s)}}}catch(o){return await r?.close(),ee(o),{failure:`${n}/${jS(o)}`}}}";
   const replacement = "async function _O(t,e){let r=null,n=\"pipe-connect\";try{let o=await kc.create(t);r=e(o),n=\"backend-info-request\";let i=await Promise.race([r.getInfo(),new Promise((s,a)=>setTimeout(()=>a(new Error(`browser backend info request timed out after ${Number(globalThis.nodeRepl?.requestMeta?.[\"x-codex-browser-use-info-timeout-ms\"]??process.env.CODEX_BROWSER_USE_INFO_TIMEOUT_MS??" + INFO_TIMEOUT_MS + ")}ms`)),Number(globalThis.nodeRepl?.requestMeta?.[\"x-codex-browser-use-info-timeout-ms\"]??process.env.CODEX_BROWSER_USE_INFO_TIMEOUT_MS??" + INFO_TIMEOUT_MS + ")))]),s=await LS(i).catch(a=>(ee(a),i));return{browser:{id:crypto.randomUUID().substring(8),api:r,info:xO(s)}}}catch(o){return await r?.close(),ee(o),{failure:`${n}/${jS(o)}`}}}";
   if (source.includes(replacement)) return { source, changed: false, reason: "already patched" };
-  if (!source.includes(original)) return { source, changed: false, failed: true, reason: "browser discovery function pattern not found" };
+  if (!source.includes(original)) return { source, changed: false, reason: "browser discovery function pattern not found; likely newer browser-client" };
   return { source: source.replace(original, replacement), changed: true, reason: "added backend info timeout" };
 }
 

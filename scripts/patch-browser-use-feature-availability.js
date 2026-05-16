@@ -16,8 +16,12 @@ const { locateBundles, relPath } = require("./patch-util");
 function patchSource(source) {
   const availabilityOriginal = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
   const availabilityReplacement = "async function Ht({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=et}){d===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(t={...t,externalBrowserUse:!0,externalBrowserUseAllowed:!0});let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=Jt(t);if(!p&&!m)return null;";
+  const availabilityOriginalV2 = "async function Zt({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=nt}){let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=rn(t);if(!p&&!m)return null;";
+  const availabilityReplacementV2 = "async function Zt({appServerConnection:e,desktopFeatureAvailability:t,hostConfig:n,isPackaged:r,repoRoot:i,resourcesPath:a,resolveCodexPath:o,resolveNodePath:s,resolveNodeReplPath:c,resolvePrimaryRuntimeNodePath:l,shouldUseWslPaths:u,platform:d,trustedBrowserClientSha256s:f=nt}){d===`win32`&&process.execPath.toLowerCase().endsWith(`codexrebuild.exe`)&&(t={...t,externalBrowserUse:!0,externalBrowserUseAllowed:!0});let p=t.inAppBrowserUse||t.externalBrowserUse,m=t.computerUse&&t.computerUseNodeRepl,h=rn(t);if(!p&&!m)return null;";
   const pipeOriginal = "function $e({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{t.inAppBrowserUse!=null&&e(t.inAppBrowserUse)},dispose:()=>{e(!1)}}}";
   const pipeReplacement = "function $e({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{(t.inAppBrowserUse!=null||t.externalBrowserUse!=null)&&e(t.inAppBrowserUse||t.externalBrowserUse)},dispose:()=>{e(!1)}}}";
+  const pipeOriginalV2 = "function tt({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{t.inAppBrowserUse!=null&&e(t.inAppBrowserUse)},dispose:()=>{e(!1)}}}";
+  const pipeReplacementV2 = "function tt({setBrowserUseNativePipeEnabled:e}){return{setDesktopFeatureAvailability:t=>{(t.inAppBrowserUse!=null||t.externalBrowserUse!=null)&&e(t.inAppBrowserUse||t.externalBrowserUse)},dispose:()=>{e(!1)}}}";
 
   let next = source;
   const changes = [];
@@ -28,6 +32,11 @@ function patchSource(source) {
   } else if (next.includes(availabilityOriginal)) {
     next = next.replace(availabilityOriginal, availabilityReplacement);
     changes.push("forced Rebuild Chrome browser-use availability");
+  } else if (next.includes(availabilityReplacementV2)) {
+    changes.push("availability already patched");
+  } else if (next.includes(availabilityOriginalV2)) {
+    next = next.replace(availabilityOriginalV2, availabilityReplacementV2);
+    changes.push("forced Rebuild Chrome browser-use availability");
   } else {
     missing.push("browser-use feature availability pattern not found");
   }
@@ -36,6 +45,11 @@ function patchSource(source) {
     changes.push("native pipe already patched");
   } else if (next.includes(pipeOriginal)) {
     next = next.replace(pipeOriginal, pipeReplacement);
+    changes.push("enabled native pipe for external browser-use");
+  } else if (next.includes(pipeReplacementV2)) {
+    changes.push("native pipe already patched");
+  } else if (next.includes(pipeOriginalV2)) {
+    next = next.replace(pipeOriginalV2, pipeReplacementV2);
     changes.push("enabled native pipe for external browser-use");
   } else {
     missing.push("browser-use native pipe pattern not found");

@@ -40,6 +40,8 @@ function findBrowserClientHashes(platform) {
   const candidates = pluginRoots.flatMap((pluginRoot) => [
     path.join(pluginRoot, "chrome", "scripts", "browser-client.mjs"),
     path.join(pluginRoot, "chrome", "0.1.7", "scripts", "browser-client.mjs"),
+    path.join(pluginRoot, "browser", "scripts", "browser-client.mjs"),
+    path.join(pluginRoot, "browser", "0.1.0-alpha2", "scripts", "browser-client.mjs"),
     path.join(pluginRoot, "browser-use", "scripts", "browser-client.mjs"),
     path.join(pluginRoot, "browser-use", "0.1.0-alpha2", "scripts", "browser-client.mjs"),
   ]);
@@ -62,15 +64,24 @@ function patchSource(source, hashes) {
     return { changed: next !== source, source: next, reason: changes.join("; ") || "no bundled browser-client found" };
   }
 
-  const allowlistPattern = /var et=\[[^\]]*\]/;
-  const replacement = `var et=[${hashes.map((hash) => `\`${hash}\``).join(",")}]`;
-  const current = next.match(allowlistPattern)?.[0];
-  if (current != null) {
+  const replacementItems = hashes.map((hash) => `\`${hash}\``).join(",");
+  const allowlistPatterns = [
+    /var et=\[[^\]]*\]/,
+    /var nt=\[[^\]]*\]/,
+  ];
+  let matched = false;
+  for (const allowlistPattern of allowlistPatterns) {
+    const current = next.match(allowlistPattern)?.[0];
+    if (current == null) continue;
+    matched = true;
+    const replacement = current.replace(/\[[^\]]*\]/, `[${replacementItems}]`);
     if (current !== replacement) {
       next = next.replace(allowlistPattern, replacement);
       changes.push("updated browser-client hash allowlist");
     }
-  } else {
+    break;
+  }
+  if (!matched) {
     return { changed: next !== source, source: next, reason: changes.join("; ") || "browser-client hash allowlist not found", failed: true };
   }
 
