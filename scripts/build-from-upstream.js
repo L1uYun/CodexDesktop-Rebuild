@@ -659,36 +659,65 @@ function patchBootstrapRebuildPlusPlusAutoStart(text) {
 
 function getRebuildAvatarAutoOpenRuntimeSnippet() {
   return [
-    "if(globalThis.__codexRebuildAvatarAutoOpenVersion!==2){globalThis.__codexRebuildAvatarAutoOpenVersion=2;try{",
-    "let __codexRebuildOpenAvatar=()=>{try{",
-    "if(globalThis.__codexRebuildAvatarWindow&&!globalThis.__codexRebuildAvatarWindow.isDestroyed())return;",
-    "let e=new n.BrowserWindow({width:356,height:320,show:false,frame:false,transparent:true,skipTaskbar:true,resizable:false,alwaysOnTop:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});",
-    "globalThis.__codexRebuildAvatarWindow=e;e.setMenuBarVisibility&&e.setMenuBarVisibility(false);e.setAlwaysOnTop&&e.setAlwaysOnTop(true,`floating`);e.once(`ready-to-show`,()=>{try{e.show()}catch{}});e.loadURL(`app://-/index.html?initialRoute=%2Favatar-overlay`).catch(t=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-load-failed`,t&&t.stack||String(t));try{e.destroy()}catch{}});",
-    "globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-created`);",
-    "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-failed`,e&&e.stack||String(e))}};",
-    "let __codexRebuildScheduleAvatar=()=>{if(globalThis.__codexRebuildAvatarAutoOpenTimer)return;globalThis.__codexRebuildAvatarAutoOpenTimer=setTimeout(()=>{globalThis.__codexRebuildAvatarAutoOpenTimer=null;__codexRebuildOpenAvatar()},4500)};",
-    "n.app.on(`browser-window-created`,__codexRebuildScheduleAvatar);n.app.whenReady().then(()=>setTimeout(__codexRebuildScheduleAvatar,6500));",
-    "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-install-failed`,e&&e.stack||String(e))}}",
+    "(()=>{if(globalThis.__codexRebuildAvatarAutoOpenVersion!==3){globalThis.__codexRebuildAvatarAutoOpenVersion=3;try{",
+    "setTimeout(()=>{try{if(we&&!we.isDestroyed())M.avatarOverlayManager.open(we.webContents).then(()=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official`)},e=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official-failed`,e&&e.stack||String(e))})}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official-error`,e&&e.stack||String(e))}},1200);",
+    "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-install-failed`,e&&e.stack||String(e))}}})()",
   ].join("");
 }
 
 function patchBootstrapRebuildAvatarAutoOpen(text) {
   const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  const legacyVersionStart = text.indexOf("if(globalThis.__codexRebuildAvatarAutoOpenVersion");
+  if (legacyVersionStart >= 0) {
+    const legacyEnd = text.indexOf(homeExpr, legacyVersionStart);
+    if (legacyEnd > legacyVersionStart) {
+      console.log("   [avatar] upgraded Rebuild avatar auto-open");
+      text = `${text.slice(0, legacyVersionStart)}${text.slice(legacyEnd)}`;
+    }
+  }
   const legacyStart = text.indexOf("if(!globalThis.__codexRebuildAvatarAutoOpenInstalled){");
   if (legacyStart >= 0) {
     const legacyEnd = text.indexOf(homeExpr, legacyStart);
     if (legacyEnd > legacyStart) {
       console.log("   [avatar] upgraded Rebuild avatar auto-open");
-      return `${text.slice(0, legacyStart)}${getRebuildAvatarAutoOpenRuntimeSnippet()}${text.slice(legacyEnd)}`;
+      text = `${text.slice(0, legacyStart)}${text.slice(legacyEnd)}`;
     }
   }
   if (text.includes("__codexRebuildAvatarAutoOpenVersion")) return text;
-  if (!text.includes(homeExpr)) {
-    console.log("   [!] bootstrap avatar auto-open insertion point not found");
-    return text;
+  return text;
+}
+
+function patchRebuildAvatarAutoOpen(asarDir) {
+  const buildDir = path.join(asarDir, ".vite", "build");
+  if (!fs.existsSync(buildDir)) {
+    console.log("   [!] build dir not found for Rebuild avatar auto-open patch");
+    return;
   }
-  console.log("   [avatar] patched Rebuild avatar auto-open");
-  return text.replace(homeExpr, `${getRebuildAvatarAutoOpenRuntimeSnippet()}${homeExpr}`);
+  let patched = false;
+  for (const entry of fs.readdirSync(buildDir)) {
+    if (!/^main.*\.js$/.test(entry)) continue;
+    const filePath = path.join(buildDir, entry);
+    let text = fs.readFileSync(filePath, "utf-8");
+    const legacyStart = text.indexOf(",if(globalThis.__codexRebuildAvatarAutoOpenVersion");
+    const legacyEndNeedle = ",A=Date.now(),await oe.deepLinks.flushPendingDeepLinks()";
+    if (legacyStart >= 0) {
+      const legacyEnd = text.indexOf(legacyEndNeedle, legacyStart);
+      if (legacyEnd > legacyStart) {
+        text = `${text.slice(0, legacyStart)}${text.slice(legacyEnd)}`;
+      }
+    }
+    if (text.includes("__codexRebuildAvatarAutoOpenVersion")) {
+      patched = true;
+      continue;
+    }
+    const startupExpr = "we&&(k.add(t.r({ensureLocalWindow:M.ensureLocalWindow,errorReporter:g,globalState:j.globalState,isMacOS:T,windowManager:M.windowManager})),ce(we)),w(`local window ensured`,A,{hostId:t.m,localWindowVisible:we?.isVisible()??!1})";
+    if (!text.includes(startupExpr)) continue;
+    text = text.replace(startupExpr, `${startupExpr},${getRebuildAvatarAutoOpenRuntimeSnippet()}`);
+    fs.writeFileSync(filePath, text, "utf-8");
+    patched = true;
+    console.log(`   [avatar] patched Rebuild avatar auto-open in ${entry}`);
+  }
+  if (!patched) console.log("   [!] main avatar auto-open insertion point not found");
 }
 
 function getRebuildLifecycleTraceRuntimeSnippet() {
@@ -948,6 +977,7 @@ function main() {
     }
     patchRebuildAsarMetadata(asarDir);
     patchRebuildBootstrap(asarDir);
+    patchRebuildAvatarAutoOpen(asarDir);
     patchRebuildWindowsImmediateExit(asarDir);
     patchRebuildChildProcessGoneFatal(asarDir);
     patchRebuildBundledMarketplaceRoot(asarDir);
