@@ -675,6 +675,8 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "stridePhase" in text
     assert "alternatingFeet" in text
     assert ".codex-avatar-root" in text
+    assert "backgroundPosition" in text
+    assert "frameIndex" in text
     assert "translate3d" in text
     assert "installAvatarBionicMotion();" in text
 

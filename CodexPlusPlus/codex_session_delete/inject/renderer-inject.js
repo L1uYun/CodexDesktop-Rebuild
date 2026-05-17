@@ -92,6 +92,7 @@
       strideStart: 0,
       strideDuration: 1300,
       heading: Math.random() > 0.5 ? 1 : -1,
+      spriteRow: "",
       pointerX: -10000,
       pointerY: -10000,
     };
@@ -128,6 +129,11 @@
     function step(now) {
       if (!document.documentElement.contains(target)) return;
       if (now >= state.nextGoalAt) pickGoal(now);
+      if (body) {
+        state.spriteRow ||= getComputedStyle(body).backgroundPosition.split(" ")[1] || "87.5%";
+        const frameIndex = Math.floor(now / 115) % 8;
+        body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${state.spriteRow}`;
+      }
       const pointer = window.__codexAvatarBionicPointer;
       const rect = target.getBoundingClientRect();
       let repelX = 0;
