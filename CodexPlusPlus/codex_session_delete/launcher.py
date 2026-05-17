@@ -885,10 +885,10 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     )
     if not avatar_target:
         return False
-    browser_ws = _browser_websocket_url(debug_port)
-    window = _cdp_call(browser_ws, "Browser.getWindowForTarget", {"targetId": avatar_target.get("id")})
-    window_id = int(window["windowId"])
-    bounds = dict(window.get("bounds") or {})
+    websocket_url = str(avatar_target.get("webSocketDebuggerUrl") or "")
+    if not websocket_url:
+        return False
+    bounds = _avatar_window_bounds(websocket_url)
     width = int(bounds.get("width") or 356)
     height = int(bounds.get("height") or 320)
     left = float(bounds.get("left") or 0)
@@ -952,8 +952,24 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     next_y = round(state["y"])
     if abs(next_x - left) < 1 and abs(next_y - top) < 1:
         return True
-    _cdp_call(browser_ws, "Browser.setWindowBounds", {"windowId": window_id, "bounds": {"left": next_x, "top": next_y, "width": width, "height": height}})
+    _move_avatar_window(websocket_url, next_x, next_y)
     return True
+
+
+def _avatar_window_bounds(websocket_url: str) -> dict[str, int]:
+    result = evaluate_script(
+        websocket_url,
+        "JSON.stringify({left:window.screenX,top:window.screenY,width:window.outerWidth,height:window.outerHeight})",
+    )
+    value = (((result.get("result") or {}).get("result") or {}).get("value")) if isinstance(result, dict) else None
+    if not isinstance(value, str):
+        raise RuntimeError("avatar window bounds unavailable")
+    data = json.loads(value)
+    return {key: int(data[key]) for key in ("left", "top", "width", "height")}
+
+
+def _move_avatar_window(websocket_url: str, left: int, top: int) -> None:
+    evaluate_script(websocket_url, f"window.moveTo({int(left)}, {int(top)});")
 
 
 def _browser_websocket_url(debug_port: int) -> str:
