@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ctypes
 import json
+import math
 import os
 import random
 import socket
@@ -859,7 +860,7 @@ def start_avatar_random_walk(debug_port: int, interval: float = 0.08) -> threadi
         return None
 
     def watch() -> None:
-        state = {"x": 0.0, "y": 0.0, "goal_x": 0.0, "goal_y": 0.0, "next_goal_at": 0.0}
+        state: dict[str, float] = {}
         while True:
             try:
                 move_avatar_window_once(debug_port, state)
@@ -898,26 +899,57 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     center = (left + width / 2, top + height / 2)
     current_monitor = next((monitor for monitor in monitors if _point_in_rect(center, monitor["rect"])), monitors[0])
     primary_monitor = next((monitor for monitor in monitors if monitor["primary"]), monitors[0])
-    target_monitor = current_monitor if current_monitor["primary"] else primary_monitor
-    work = target_monitor["work"]
+    work = current_monitor["work"]
     min_x = work[0]
     min_y = work[1]
     max_x = max(min_x, work[2] - width)
     max_y = max(min_y, work[3] - height)
     now = time.monotonic()
-    if now >= state.get("next_goal_at", 0) or not (min_x <= state.get("goal_x", left) <= max_x and min_y <= state.get("goal_y", top) <= max_y):
-        if current_monitor["primary"]:
-            state["goal_x"] = random.uniform(min_x, max_x)
-            state["goal_y"] = random.uniform(min_y, max_y)
-            state["next_goal_at"] = now + random.uniform(4.0, 9.0)
-        else:
-            state["goal_x"] = min(max(primary_monitor["work"][0], left), max(primary_monitor["work"][0], primary_monitor["work"][2] - width))
-            state["goal_y"] = min(max(primary_monitor["work"][1], top), max(primary_monitor["work"][1], primary_monitor["work"][3] - height))
-            state["next_goal_at"] = now + 1.0
-    state["x"] = left + (state["goal_x"] - left) * 0.018
-    state["y"] = top + (state["goal_y"] - top) * 0.018
-    next_x = round(max(min_x, min(max_x, state["x"])))
-    next_y = round(max(min_y, min(max_y, state["y"])))
+    last_t = state.get("last_t", now - 0.08)
+    dt = max(0.04, min(0.22, now - last_t))
+    state["last_t"] = now
+    if "x" not in state or abs(state.get("x", left) - left) > 120 or abs(state.get("y", top) - top) > 120:
+        state["x"] = left
+        state["y"] = top
+        state["heading"] = random.uniform(0.0, 6.283185307179586)
+        state["speed"] = random.uniform(42.0, 68.0)
+    state["heading"] = state.get("heading", 0.0) + random.uniform(-1.25, 1.25) * dt
+    state["speed"] += (random.uniform(42.0, 72.0) - state.get("speed", 56.0)) * min(1.0, dt * 0.7)
+    vx = math.cos(state["heading"]) * state["speed"]
+    vy = math.sin(state["heading"]) * state["speed"] * 0.72
+    steer_x = 0.0
+    steer_y = 0.0
+    margin = 120.0
+    if state["x"] < min_x + margin:
+        steer_x += (min_x + margin - state["x"]) / margin
+    if state["x"] > max_x - margin:
+        steer_x -= (state["x"] - (max_x - margin)) / margin
+    if state["y"] < min_y + margin:
+        steer_y += (min_y + margin - state["y"]) / margin
+    if state["y"] > max_y - margin:
+        steer_y -= (state["y"] - (max_y - margin)) / margin
+    if not current_monitor["primary"]:
+        primary_work = primary_monitor["work"]
+        primary_x = min(max(primary_work[0], state["x"]), max(primary_work[0], primary_work[2] - width))
+        primary_y = min(max(primary_work[1], state["y"]), max(primary_work[1], primary_work[3] - height))
+        steer_x += max(-3.0, min(3.0, (primary_x - state["x"]) / 260.0))
+        steer_y += max(-2.0, min(2.0, (primary_y - state["y"]) / 260.0))
+    vx += steer_x * 95.0
+    vy += steer_y * 75.0
+    if abs(steer_x) > 0.4 or abs(steer_y) > 0.4:
+        state["heading"] = math.atan2(vy / 0.72, vx)
+    state["x"] += vx * dt
+    state["y"] += vy * dt
+    hit_x = state["x"] < min_x or state["x"] > max_x
+    hit_y = state["y"] < min_y or state["y"] > max_y
+    state["x"] = max(min_x, min(max_x, state["x"]))
+    state["y"] = max(min_y, min(max_y, state["y"]))
+    if hit_x:
+        state["heading"] = math.pi - state["heading"]
+    if hit_y:
+        state["heading"] = -state["heading"]
+    next_x = round(state["x"])
+    next_y = round(state["y"])
     if abs(next_x - left) < 1 and abs(next_y - top) < 1:
         return True
     _cdp_call(browser_ws, "Browser.setWindowBounds", {"windowId": window_id, "bounds": {"left": next_x, "top": next_y, "width": width, "height": height}})

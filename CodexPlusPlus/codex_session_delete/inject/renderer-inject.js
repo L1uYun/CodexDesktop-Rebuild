@@ -74,106 +74,27 @@
     if (target.dataset.codexAvatarBionicMotion === "1") return;
     target.dataset.codexAvatarBionicMotion = "1";
     target.style.transformOrigin = "50% 72%";
-    target.style.willChange = "transform";
-    target.style.transition = "filter 180ms ease";
+    target.style.willChange = "auto";
+    target.style.transition = "none";
+    target.style.transform = "translate3d(0, 0, 0)";
     if (body) {
       body.style.transformOrigin = "50% 78%";
       body.style.willChange = "transform";
     }
 
-    const state = {
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      goalX: 0,
-      goalY: 0,
-      nextGoalAt: 0,
-      strideStart: 0,
-      strideDuration: 1300,
-      heading: Math.random() > 0.5 ? 1 : -1,
-      spriteRow: "",
-      pointerX: -10000,
-      pointerY: -10000,
-    };
-
-    window.__codexAvatarBionicPointerHandler ||= (event) => {
-      window.__codexAvatarBionicPointer = { x: event.clientX, y: event.clientY };
-    };
-    window.addEventListener("pointermove", window.__codexAvatarBionicPointerHandler, { passive: true });
-
-    function pickGoal(now) {
-      if (Math.random() < 0.18) state.heading *= -1;
-      const stride = 14 + Math.random() * 18;
-      state.goalX += stride * state.heading;
-      state.goalY += (Math.random() - 0.5) * 8;
-      state.strideStart = now;
-      state.strideDuration = 1150 + Math.random() * 900;
-      state.nextGoalAt = now + state.strideDuration;
-    }
-
-    function clampAvatarOffset(x, y, rect) {
-      const margin = 4;
-      const baseLeft = rect.left - state.x;
-      const baseTop = rect.top - state.y;
-      const minX = margin - baseLeft;
-      const minY = margin - baseTop;
-      const maxX = window.innerWidth - margin - rect.width - baseLeft;
-      const maxY = window.innerHeight - margin - rect.height - baseTop;
-      return {
-        x: Math.max(minX, Math.min(maxX, x)),
-        y: Math.max(minY, Math.min(maxY, y)),
-      };
-    }
-
     function step(now) {
       if (!document.documentElement.contains(target)) return;
-      if (now >= state.nextGoalAt) pickGoal(now);
       if (body) {
-        state.spriteRow ||= getComputedStyle(body).backgroundPosition.split(" ")[1] || "87.5%";
-        const frameIndex = Math.floor(now / 115) % 8;
+        const frameIndex = Math.floor(now / 95) % 8;
         const crawlRow = "87.5%";
         body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${crawlRow}`;
-      }
-      const pointer = window.__codexAvatarBionicPointer;
-      const rect = target.getBoundingClientRect();
-      let repelX = 0;
-      let repelY = 0;
-      if (pointer) {
-        const dx = rect.left + rect.width / 2 - pointer.x;
-        const dy = rect.top + rect.height / 2 - pointer.y;
-        const distance = Math.max(1, Math.hypot(dx, dy));
-        if (distance < 120) {
-          const force = (120 - distance) / 120;
-          repelX = (dx / distance) * force * 34;
-          repelY = (dy / distance) * force * 22;
-        }
-      }
-      const stridePhase = Math.min(1, Math.max(0, (now - state.strideStart) / state.strideDuration));
-      const legBeat = Math.sin(stridePhase * Math.PI * 2);
-      const bodyLift = Math.max(0, Math.sin(stridePhase * Math.PI)) * -1.8;
-      const lateralSway = legBeat * 1.6;
-      const microPause = stridePhase > 0.72 ? 0.55 : 1;
-      const boundedGoal = clampAvatarOffset(state.goalX + repelX, state.goalY + repelY + bodyLift, rect);
-      const desiredX = boundedGoal.x;
-      const desiredY = boundedGoal.y;
-      state.vx = (state.vx + (desiredX - state.x) * 0.012 * microPause) * 0.82;
-      state.vy = (state.vy + (desiredY - state.y) * 0.01 * microPause) * 0.84;
-      state.x += state.vx;
-      state.y += state.vy;
-      const boundedOffset = clampAvatarOffset(state.x, state.y, rect);
-      state.x = boundedOffset.x;
-      state.y = boundedOffset.y;
-      if (Math.abs(boundedOffset.x - desiredX) > 1) state.heading *= -1;
-      target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0)`;
-      if (body) {
+        const bodyLift = Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -1 : 0;
         body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;
       }
       window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);
     }
 
     cancelAnimationFrame(window.__codexAvatarBionicMotionFrame);
-    pickGoal(performance.now());
     window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);
   }
 
