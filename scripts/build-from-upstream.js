@@ -736,18 +736,21 @@ function patchRebuildAvatarAutoMove(asarDir) {
     if (!/^main.*\.js$/.test(entry)) continue;
     const filePath = path.join(buildDir, entry);
     let text = fs.readFileSync(filePath, "utf-8");
-    if (text.includes("avatar-overlay-auto-move")) {
+    const methodNeedle = "setElementSize(e,{mascot:t,tray:n}){";
+    const methodPatch = "autoMove(e,t,r){let i=this.window;if(i==null||i.isDestroyed()||i.webContents.id!==e||!Number.isFinite(t)||!Number.isFinite(r))return;this.cancelMomentum();let a=this.getLayout(i),o={x:t+a.mascot.left,y:r+a.mascot.top,width:this.anchor.width,height:this.anchor.height},s=n.screen.getDisplayNearestPoint(FU(o)).bounds,c=n.screen.getDisplayNearestPoint(n.screen.getCursorScreenPoint()).bounds,l=VU(s,c)?s:{x:Math.min(s.x,c.x),y:Math.min(s.y,c.y),width:Math.max(s.x+s.width,c.x+c.width)-Math.min(s.x,c.x),height:Math.max(s.y+s.height,c.y+c.height)-Math.min(s.y,c.y)};this.anchor=o,this.applyLayout(i,l),this.persistWindowBounds(i)}";
+    if (text.includes(methodPatch) && text.includes("avatar-overlay-auto-move")) {
       patched = true;
       continue;
     }
-    const methodNeedle = "setElementSize(e,{mascot:t,tray:n}){";
-    const methodPatch = "autoMove(e,t,r){let i=this.window;if(i==null||i.isDestroyed()||i.webContents.id!==e||!Number.isFinite(t)||!Number.isFinite(r))return;this.cancelMomentum();let a=this.getLayout(i),o={x:t+a.mascot.left,y:r+a.mascot.top,width:this.anchor.width,height:this.anchor.height};this.anchor=o,this.applyLayout(i,n.screen.getDisplayNearestPoint(FU(o)).bounds),this.persistWindowBounds(i)}";
+    text = text.replace(/autoMove\(e,t,r\)\{let i=this\.window;if\(i==null\|\|i\.isDestroyed\(\)\|\|i\.webContents\.id!==e\|\|!Number\.isFinite\(t\)\|\|!Number\.isFinite\(r\)\)return;this\.cancelMomentum\(\);let a=this\.getLayout\(i\),o=\{x:t\+a\.mascot\.left,y:r\+a\.mascot\.top,width:this\.anchor\.width,height:this\.anchor\.height\};this\.anchor=o,this\.applyLayout\(i,n\.screen\.getDisplayNearestPoint\(FU\(o\)\)\.bounds\),this\.persistWindowBounds\(i\)\}/, "");
     if (!text.includes(methodNeedle)) continue;
-    text = text.replace(methodNeedle, `${methodPatch}${methodNeedle}`);
+    if (!text.includes(methodPatch)) text = text.replace(methodNeedle, `${methodPatch}${methodNeedle}`);
     const caseNeedle = "case`avatar-overlay-element-size-changed`:this.avatarOverlayManager.setElementSize(r.id,{isTrayVisible:i.isTrayVisible,mascot:i.mascot,tray:i.tray});break;";
     const casePatch = `${caseNeedle}case\`avatar-overlay-auto-move\`:this.avatarOverlayManager.autoMove(r.id,i.left,i.top);break;`;
-    if (!text.includes(caseNeedle)) continue;
-    text = text.replace(caseNeedle, casePatch);
+    if (!text.includes("case`avatar-overlay-auto-move`")) {
+      if (!text.includes(caseNeedle)) continue;
+      text = text.replace(caseNeedle, casePatch);
+    }
     fs.writeFileSync(filePath, text, "utf-8");
     patched = true;
     console.log(`   [avatar] patched Rebuild avatar auto-move in ${entry}`);

@@ -916,14 +916,20 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     center = (left + width / 2, top + height / 2)
     current_monitor = next((monitor for monitor in monitors if _point_in_rect(center, monitor["rect"])), monitors[0])
     primary_monitor = next((monitor for monitor in monitors if monitor["primary"]), monitors[0])
+    cursor = _cursor_position()
+    target_monitor = current_monitor
+    if cursor is not None:
+        target_monitor = next((monitor for monitor in monitors if _point_in_rect(cursor, monitor["rect"])), current_monitor)
+    elif not current_monitor["primary"]:
+        target_monitor = primary_monitor
     work = current_monitor["work"]
-    if not current_monitor["primary"]:
-        primary_work = primary_monitor["work"]
+    if target_monitor is not current_monitor:
+        target_work = target_monitor["work"]
         work = (
-            min(work[0], primary_work[0]),
-            min(work[1], primary_work[1]),
-            max(work[2], primary_work[2]),
-            max(work[3], primary_work[3]),
+            min(work[0], target_work[0]),
+            min(work[1], target_work[1]),
+            max(work[2], target_work[2]),
+            max(work[3], target_work[3]),
         )
     min_x = work[0]
     min_y = work[1]
@@ -955,23 +961,24 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         steer_y += (min_y + margin - state["y"]) / margin
     if state["y"] > max_y - margin:
         steer_y -= (state["y"] - (max_y - margin)) / margin
-    if not current_monitor["primary"]:
-        primary_work = primary_monitor["work"]
-        primary_x = min(max(primary_work[0], state["x"]), max(primary_work[0], primary_work[2] - width))
-        primary_y = min(max(primary_work[1], state["y"]), max(primary_work[1], primary_work[3] - height))
-        steer_x += max(-6.0, min(6.0, (primary_x - state["x"]) / 140.0))
-        steer_y += max(-2.0, min(2.0, (primary_y - state["y"]) / 260.0))
-    cursor = _cursor_position()
+    if target_monitor is not current_monitor:
+        target_work = target_monitor["work"]
+        target_x = min(max(target_work[0], state["x"]), max(target_work[0], target_work[2] - width))
+        target_y = min(max(target_work[1], state["y"]), max(target_work[1], target_work[3] - height))
+        steer_x += max(-6.0, min(6.0, (target_x - state["x"]) / 140.0))
+        steer_y += max(-2.0, min(2.0, (target_y - state["y"]) / 260.0))
     if cursor is not None:
-        cursor_push_x, cursor_push_y = _avatar_cursor_repulsion(
+        cursor_push_x, cursor_push_y = _avatar_cursor_repulsion_after_grace(
+            state,
+            now,
             state["x"] + (avatar_center_x - left),
             state["y"] + (avatar_center_y - top),
             cursor,
         )
     vx += steer_x * 38.0
     vy += steer_y * 30.0
-    vx += cursor_push_x * 42.0
-    vy += cursor_push_y * 42.0
+    vx += cursor_push_x * 18.0
+    vy += cursor_push_y * 18.0
     if abs(steer_x) > 0.4 or abs(steer_y) > 0.4 or abs(cursor_push_x) > 0.4 or abs(cursor_push_y) > 0.4:
         state["heading"] = math.atan2(vy / 0.72, vx)
     state["x"] += vx * dt
@@ -1063,15 +1070,36 @@ def _avatar_cursor_repulsion(center_x: float, center_y: float, cursor: tuple[flo
     dx = center_x - cursor[0]
     dy = center_y - cursor[1]
     distance = math.hypot(dx, dy)
-    radius = 240.0
+    radius = 180.0
     if distance <= 0.001 or distance >= radius:
         return (0.0, 0.0)
     unit_x = dx / distance
     unit_y = dy / distance
     strength = ((radius - distance) / radius) ** 2
-    if distance < 70.0:
-        strength += (70.0 - distance) / 70.0
-    return (unit_x * strength * 2.4, unit_y * strength * 2.4)
+    return (unit_x * strength * 1.4, unit_y * strength * 1.4)
+
+
+def _avatar_cursor_repulsion_after_grace(
+    state: dict[str, float],
+    now: float,
+    center_x: float,
+    center_y: float,
+    cursor: tuple[float, float],
+) -> tuple[float, float]:
+    if _avatar_cursor_distance(center_x, center_y, cursor) >= 150.0:
+        state.pop("cursor_near_since", None)
+        return (0.0, 0.0)
+    near_since = state.get("cursor_near_since")
+    if near_since is None:
+        state["cursor_near_since"] = now
+        return (0.0, 0.0)
+    if now - near_since < 0.9:
+        return (0.0, 0.0)
+    return _avatar_cursor_repulsion(center_x, center_y, cursor)
+
+
+def _avatar_cursor_distance(center_x: float, center_y: float, cursor: tuple[float, float]) -> float:
+    return math.hypot(center_x - cursor[0], center_y - cursor[1])
 
 
 def _browser_websocket_url(debug_port: int) -> str:
