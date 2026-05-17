@@ -648,6 +648,31 @@ def test_renderer_script_has_sponsor_tab():
     assert "codex-plus-sponsor-qr" in text
 
 
+def test_renderer_script_skips_codex_plus_menu_on_avatar_overlay():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+
+    assert "function isAvatarOverlayPage" in text
+    assert 'searchParams.get("initialRoute") === "/avatar-overlay"' in text
+    assert "if (isAvatarOverlayPage())" in text
+    assert "removeDuplicateCodexPlusMenus(null)" in text
+
+
+def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+
+    assert "function installAvatarBionicMotion" in text
+    assert 'document.querySelector(".codex-avatar-button")' in text
+    assert "dataset.codexAvatarBionicMotion" in text
+    assert "__codexAvatarBionicMotionRetryTimer" in text
+    assert "setTimeout(installAvatarBionicMotion, 250)" in text
+    assert "requestAnimationFrame(step)" in text
+    assert "pointermove" in text
+    assert "repelX" in text
+    assert "breath" in text
+    assert "translate3d" in text
+    assert "installAvatarBionicMotion();" in text
+
+
 def test_renderer_script_has_backend_provider_sync_toggle():
     text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
 

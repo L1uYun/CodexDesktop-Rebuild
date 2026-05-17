@@ -54,6 +54,87 @@
     pluginSvgPath: 'svg path[d^="M7.94562 14.0277"]',
   };
 
+  function isAvatarOverlayPage() {
+    try {
+      return new URL(window.location.href).searchParams.get("initialRoute") === "/avatar-overlay";
+    } catch {
+      return false;
+    }
+  }
+
+  function installAvatarBionicMotion() {
+    if (!isAvatarOverlayPage()) return;
+    const target = document.querySelector(".codex-avatar-button");
+    if (!target) {
+      clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
+      window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);
+      return;
+    }
+    if (target.dataset.codexAvatarBionicMotion === "1") return;
+    target.dataset.codexAvatarBionicMotion = "1";
+    target.style.transformOrigin = "50% 72%";
+    target.style.willChange = "transform";
+    target.style.transition = "filter 180ms ease";
+
+    const state = {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      goalX: 0,
+      goalY: 0,
+      nextGoalAt: 0,
+      pointerX: -10000,
+      pointerY: -10000,
+    };
+
+    window.__codexAvatarBionicPointerHandler ||= (event) => {
+      window.__codexAvatarBionicPointer = { x: event.clientX, y: event.clientY };
+    };
+    window.addEventListener("pointermove", window.__codexAvatarBionicPointerHandler, { passive: true });
+
+    function pickGoal(now) {
+      state.goalX = (Math.random() - 0.5) * 28;
+      state.goalY = (Math.random() - 0.5) * 18;
+      state.nextGoalAt = now + 2200 + Math.random() * 2600;
+    }
+
+    function step(now) {
+      if (!document.documentElement.contains(target)) return;
+      if (now >= state.nextGoalAt) pickGoal(now);
+      const pointer = window.__codexAvatarBionicPointer;
+      const rect = target.getBoundingClientRect();
+      let repelX = 0;
+      let repelY = 0;
+      if (pointer) {
+        const dx = rect.left + rect.width / 2 - pointer.x;
+        const dy = rect.top + rect.height / 2 - pointer.y;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        if (distance < 120) {
+          const force = (120 - distance) / 120;
+          repelX = (dx / distance) * force * 34;
+          repelY = (dy / distance) * force * 22;
+        }
+      }
+      const breath = Math.sin(now / 620);
+      const twitch = Math.sin(now / 137) * 0.7 + Math.sin(now / 211) * 0.45;
+      const desiredX = state.goalX + repelX + twitch;
+      const desiredY = state.goalY + repelY + breath * 4;
+      state.vx = (state.vx + (desiredX - state.x) * 0.025) * 0.88;
+      state.vy = (state.vy + (desiredY - state.y) * 0.025) * 0.88;
+      state.x += state.vx;
+      state.y += state.vy;
+      const rotate = Math.max(-4, Math.min(4, state.vx * 1.4 + twitch * 0.35));
+      const scale = 1 + breath * 0.018;
+      target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
+      window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);
+    }
+
+    cancelAnimationFrame(window.__codexAvatarBionicMotionFrame);
+    pickGoal(performance.now());
+    window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);
+  }
+
   function installStyle() {
     const existingStyle = document.getElementById(styleId);
     if (existingStyle?.dataset.codexDeleteStyleVersion === codexDeleteStyleVersion) return;
@@ -991,6 +1072,10 @@
   }
 
   function installCodexPlusMenu() {
+    if (isAvatarOverlayPage()) {
+      removeDuplicateCodexPlusMenus(null);
+      return;
+    }
     const existing = document.getElementById(codexPlusMenuId);
     removeDuplicateCodexPlusMenus(existing);
     let insertionPoint = findNativeMenuInsertionPoint();
@@ -1032,6 +1117,10 @@
   }
 
   function installCodexPlusLauncher() {
+    if (isAvatarOverlayPage()) {
+      removeDuplicateCodexPlusMenus(null);
+      return;
+    }
     const existing = document.getElementById(codexPlusLauncherId);
     if (existing?.dataset.codexPlusLauncherVersion === "1") {
       configureCodexPlusTrigger(existing, existing.querySelector("button"), "codex-plus-trigger");
@@ -3166,6 +3255,11 @@
   }
 
   function scanLightweight() {
+    if (isAvatarOverlayPage()) {
+      removeDuplicateCodexPlusMenus(null);
+      installAvatarBionicMotion();
+      return;
+    }
     installStyle();
     installCodexPlusMenu();
     scheduleBackendHeartbeat();
@@ -3174,6 +3268,7 @@
   }
 
   function scanDeferred() {
+    if (isAvatarOverlayPage()) return;
     enablePluginEntry();
     unblockPluginInstallButtons();
     patchCodexModelWhitelist();
