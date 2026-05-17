@@ -67,6 +67,7 @@ def test_launch_codex_injects_detected_local_proxy(monkeypatch):
 
     assert popen_calls[0][1]["env"]["HTTP_PROXY"] == "http://127.0.0.1:7897"
     assert popen_calls[0][1]["env"]["HTTPS_PROXY"] == "http://127.0.0.1:7897"
+    assert popen_calls[0][1]["env"]["CODEX_REBUILD_PLUS_PLUS_LAUNCHED"] == "1"
 
 
 def test_launch_codex_keeps_explicit_proxy(monkeypatch):
@@ -116,6 +117,7 @@ def test_launch_uses_packaged_activation_for_windowsapps(monkeypatch):
         lambda aumid, arguments: activated.append((aumid, arguments)) or 1234,
     )
     monkeypatch.setattr(launcher.subprocess, "Popen", lambda command: launched.append(command))
+    monkeypatch.delenv("CODEX_REBUILD_PLUS_PLUS_LAUNCHED", raising=False)
 
     assert launcher.launch_codex_app(app_dir, 9229) == 1234
 
@@ -124,6 +126,7 @@ def test_launch_uses_packaged_activation_for_windowsapps(monkeypatch):
         "--remote-debugging-port=9229 --remote-allow-origins=http://127.0.0.1:9229",
     )]
     assert launched == []
+    assert "CODEX_REBUILD_PLUS_PLUS_LAUNCHED" not in launcher.os.environ
 
 
 def test_windows_port_selector_uses_ephemeral_port_when_default_is_busy(monkeypatch):

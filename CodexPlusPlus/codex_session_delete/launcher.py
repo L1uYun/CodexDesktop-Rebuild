@@ -735,10 +735,12 @@ def activate_packaged_app(app_user_model_id: str, arguments: str) -> int:
 def launch_codex_app(app_dir: Path, debug_port: int) -> Any:
     app_user_model_id = packaged_app_user_model_id(app_dir) if sys.platform == "win32" else None
     env = codex_process_environment()
+    env["CODEX_REBUILD_PLUS_PLUS_LAUNCHED"] = "1"
     if app_user_model_id:
         proxy_keys = ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY")
-        previous = {key: os.environ.get(key) for key in proxy_keys}
-        os.environ.update({key: env[key] for key in proxy_keys if key in env})
+        env_keys = (*proxy_keys, "CODEX_REBUILD_PLUS_PLUS_LAUNCHED")
+        previous = {key: os.environ.get(key) for key in env_keys}
+        os.environ.update({key: env[key] for key in env_keys if key in env})
         try:
             return activate_packaged_app(app_user_model_id, subprocess.list2cmdline(build_codex_arguments(debug_port)))
         finally:
