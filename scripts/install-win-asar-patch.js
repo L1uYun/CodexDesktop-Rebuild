@@ -94,6 +94,7 @@ function main() {
 
   runPatchScript("patch-browser-client-discovery-timeout.js");
   runPatchScript("patch-browser-trust-bridge.js");
+  runPatchScript("patch-fast-mode.js");
   runPatchScript("patch-plugin-auth.js");
   runPatchScript("patch-plugins-experience-feature.js");
   runPatchScript("patch-browser-use-feature-availability.js");
