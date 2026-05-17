@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from codex_session_delete.macos_installer import install_macos_app, uninstall_macos_app
-from codex_session_delete.rebuild_config import HELPER_DATA_DIR_NAME
 from codex_session_delete.windows_installer import install_windows_shortcuts, uninstall_windows_shortcuts
 
 
@@ -42,6 +41,6 @@ def uninstall_codex_plus_plus(options: InstallOptions) -> None:
 
 
 def remove_owned_data() -> None:
-    data_dir = Path.home() / HELPER_DATA_DIR_NAME
+    data_dir = Path.home() / ".codex-session-delete"
     if data_dir.exists():
         shutil.rmtree(data_dir)

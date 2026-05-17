@@ -55,13 +55,3 @@ def test_resolve_codex_app_dir_uses_macos_discovery_on_darwin(monkeypatch, tmp_p
     monkeypatch.setattr("codex_session_delete.app_paths.find_latest_codex_app_dir", lambda: None)
 
     assert resolve_codex_app_dir() == mac_app
-
-
-def test_resolve_codex_app_dir_prefers_rebuild_dir_on_windows(monkeypatch, tmp_path):
-    rebuild_dir = tmp_path / "CodexRebuild"
-    rebuild_dir.mkdir()
-    monkeypatch.setattr("codex_session_delete.app_paths.sys.platform", "win32")
-    monkeypatch.setattr("codex_session_delete.app_paths.DEFAULT_APP_DIR", rebuild_dir)
-    monkeypatch.setattr("codex_session_delete.app_paths.find_latest_codex_app_dir", lambda: (_ for _ in ()).throw(AssertionError("official Codex should not be used")))
-
-    assert resolve_codex_app_dir() == rebuild_dir

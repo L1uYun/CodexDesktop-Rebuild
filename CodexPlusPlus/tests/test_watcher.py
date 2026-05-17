@@ -58,10 +58,6 @@ def test_watch_loop_exits_on_non_windows(monkeypatch, tmp_path):
     assert watcher.watch_loop() == 1
 
 
-def test_watch_loop_default_debug_port_is_rebuild_specific():
-    assert watcher.DEFAULT_DEBUG_PORT == 19339
-
-
 def test_wait_until_no_codex_success(monkeypatch):
     calls = {"n": 0}
 
@@ -106,8 +102,6 @@ def test_spawn_launcher_passes_debug_port(monkeypatch):
     args, _ = calls[0]
     assert "--debug-port" in args
     assert "9333" in args
-    assert "--app-dir" in args
-    assert "D:\\software\\CodexRebuild" in [value.replace("/", "\\") for value in args]
 
 
 def test_takeover_skips_kill_when_cdp_appears(monkeypatch):
@@ -122,43 +116,19 @@ def test_takeover_skips_kill_when_cdp_appears(monkeypatch):
     assert killed == []
 
 
-def test_launcher_process_active_detects_start_or_launch(monkeypatch):
-    monkeypatch.setattr(watcher, "_run_powershell", lambda script, timeout=4.0: "1234\r\n")
-
-    assert watcher.launcher_process_active() is True
-
-
-def test_launcher_process_active_returns_false_without_pid(monkeypatch):
-    monkeypatch.setattr(watcher, "_run_powershell", lambda script, timeout=4.0: "")
-
-    assert watcher.launcher_process_active() is False
-
-
-def test_find_codex_processes_excludes_non_rebuild_commands(monkeypatch):
+def test_find_codex_processes_excludes_cli_commands(monkeypatch):
     output = "\n".join(
         [
-            "101\tD:\\software\\CodexRebuild\\CodexRebuild.exe\t\"D:\\software\\CodexRebuild\\CodexRebuild.exe\"",
-            "102\tC:\\Program Files\\WindowsApps\\OpenAI.Codex_1.2.3\\Codex.exe\t\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_1.2.3\\Codex.exe\"",
+            "101\tC:\\Program Files\\WindowsApps\\OpenAI.Codex_1.2.3\\Codex.exe\t\"C:\\Program Files\\WindowsApps\\OpenAI.Codex_1.2.3\\Codex.exe\"",
             "202\tC:\\Users\\User\\AppData\\Roaming\\npm\\codex.exe\t\"C:\\Users\\User\\AppData\\Roaming\\npm\\codex.exe\"",
             "303\tC:\\Users\\User\\AppData\\Local\\Programs\\codex\\codex.exe\t\"C:\\Users\\User\\AppData\\Local\\Programs\\codex\\codex.exe\" --model opus",
+            "404\tD:\\software\\CodexRebuild\\CodexRebuild.exe\t\"D:\\software\\CodexRebuild\\CodexRebuild.exe\"",
         ]
     )
     monkeypatch.setattr(watcher, "_run_powershell", lambda script: output)
 
-    assert watcher.find_codex_processes() == [101]
+    assert watcher.find_codex_processes() == [404]
 
 
 def test_takeover_failure_backoff_is_not_too_short():
     assert watcher.TAKEOVER_FAILURE_BACKOFF_SECONDS >= 30.0
-
-
-def test_watcher_takeover_is_disabled_by_default(monkeypatch):
-    monkeypatch.delenv(watcher.WATCHER_TAKEOVER_ENV, raising=False)
-
-    assert watcher.takeover_enabled() is False
-
-
-def test_watcher_takeover_can_be_enabled_explicitly(monkeypatch):
-    monkeypatch.setenv(watcher.WATCHER_TAKEOVER_ENV, "1")
-
-    assert watcher.takeover_enabled() is True

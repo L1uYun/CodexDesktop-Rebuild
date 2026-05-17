@@ -4,9 +4,27 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import unquote
+from urllib.request import Request, urlopen
 from typing import Protocol
 
 from codex_session_delete.models import DeleteResult, DeleteStatus, ExportResult, ExportStatus, SessionRef
+
+DEFAULT_AD_LIST_URLS = [
+    "https://raw.githubusercontent.com/BigPizzaV3/Ad-List/main/ads.json",
+    "https://cdn.jsdelivr.net/gh/BigPizzaV3/Ad-List@main/ads.json",
+]
+
+
+def fetch_ad_list(urls: list[str] | None = None) -> dict[str, object]:
+    last_error: Exception | None = None
+    for url in urls or DEFAULT_AD_LIST_URLS:
+        try:
+            request = Request(url, headers={"User-Agent": "CodexPlusPlus"})
+            with urlopen(request, timeout=10) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except Exception as exc:
+            last_error = exc
+    raise last_error or RuntimeError("ad list unavailable")
 
 
 class DeleteService(Protocol):
@@ -32,11 +50,14 @@ class HelperServer(ThreadingHTTPServer):
         *,
         allow_http_mutation: bool = False,
         http_mutation_token: str | None = None,
+        ad_list_url: str = "https://raw.githubusercontent.com/BigPizzaV3/Ad-List/main/ads.json",
+        ad_list_backup_urls: list[str] | None = None,
     ):
         self.service = service
         self.export_service = export_service
         self.allow_http_mutation = allow_http_mutation
         self.http_mutation_token = http_mutation_token
+        self.ad_list_urls = [ad_list_url, *(ad_list_backup_urls or DEFAULT_AD_LIST_URLS[1:])]
         super().__init__((host, port), _Handler)
 
     @property
@@ -53,6 +74,9 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == "/health":
             self._send_json({"ok": True})
+            return
+        if self.path == "/ads":
+            self._send_ads()
             return
         if self.path.startswith("/assets/"):
             self._send_asset(self.path.removeprefix("/assets/"))
@@ -140,9 +164,12 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _send_ads(self) -> None:
+        self._send_json(fetch_ad_list(self.server.ad_list_urls))
+
     def _send_asset(self, name: str) -> None:
         asset_name = unquote(name)
-        if asset_name not in {"sponsor-alipay.jpg", "sponsor-wechat.jpg"}:
+        if asset_name not in {"sponsor-alipay.jpg", "sponsor-wechat.jpg", "rawchat-sponsor.jpg"}:
             self._send_json({"error": "not found"}, status=404)
             return
         data = resources.files("codex_session_delete").joinpath("assets", asset_name).read_bytes()

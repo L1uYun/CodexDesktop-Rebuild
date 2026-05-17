@@ -44,8 +44,8 @@ def test_unsupported_platform_raises(monkeypatch):
         installers.install_codex_plus_plus(InstallOptions())
 
 
-def test_remove_owned_data_removes_codex_rebuild_plus_plus_dir(tmp_path, monkeypatch):
-    data_dir = tmp_path / ".codex-rebuild-plus-plus"
+def test_remove_owned_data_removes_codex_session_delete_dir(tmp_path, monkeypatch):
+    data_dir = tmp_path / ".codex-session-delete"
     data_dir.mkdir()
     (data_dir / "marker.txt").write_text("x", encoding="utf-8")
     monkeypatch.setattr(installers.Path, "home", lambda: tmp_path)

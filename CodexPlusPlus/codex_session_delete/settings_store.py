@@ -5,8 +5,6 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from codex_session_delete.rebuild_config import HELPER_DATA_DIR_NAME
-
 
 @dataclass(frozen=True)
 class BackendSettings:
@@ -46,4 +44,4 @@ class SettingsStore:
 
 
 def default_settings_path() -> Path:
-    return Path.home() / HELPER_DATA_DIR_NAME / "settings.json"
+    return Path.home() / ".codex-session-delete" / "settings.json"

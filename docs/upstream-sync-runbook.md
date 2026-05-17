@@ -105,6 +105,12 @@ Use `robocopy` for the install copy. Plain `Copy-Item -Recurse` has failed on
 the vendored plugin `node_modules` tree with transient "Could not find a part of
 the path" errors, leaving `D:\software\CodexRebuild` half-installed.
 
+If installing from `out\Codex-win-x64-<version>.zip`, the archive root is the app
+root. Do not select the first extracted directory as the copy source; that can
+pick `locales\` and mirror only language packs into `D:\software\CodexRebuild`.
+Either expand directly into an empty target directory or copy the extraction
+directory itself.
+
 The CLI version should match the official app bundle. For the 2026-05-16 sync it
 was:
 
@@ -136,6 +142,11 @@ running Rebuild process:
 ```text
 pythonw.exe -m codex_session_delete attach --app-dir D:\software\CodexRebuild --debug-port 19339
 ```
+
+For Rebuild, CodexPlusPlus process discovery and cleanup must stay scoped to
+`D:\software\CodexRebuild\CodexRebuild.exe`. Do not include official
+`Codex.exe` or `codex.exe` in the Rebuild watcher process filter, and do not
+use global `Stop-Process` cleanup for those names.
 
 The injected renderer should create a visible `Codex++` launcher at the
 upper-right corner, even when the native header insertion point changes.

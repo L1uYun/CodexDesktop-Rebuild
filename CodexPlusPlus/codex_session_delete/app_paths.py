@@ -6,8 +6,6 @@ import sys
 import subprocess
 from pathlib import Path
 
-from codex_session_delete.rebuild_config import DEFAULT_APP_DIR
-
 
 _VERSION_RE = re.compile(r"OpenAI\.Codex_([0-9.]+)_")
 
@@ -87,6 +85,4 @@ def resolve_codex_app_dir(app_dir: Path | None = None) -> Path | None:
         return app_dir
     if sys.platform == "darwin":
         return find_macos_codex_app()
-    if DEFAULT_APP_DIR.is_dir():
-        return DEFAULT_APP_DIR
     return find_latest_codex_app_dir()

@@ -19,8 +19,6 @@ KILL_WAIT_TIMEOUT_SECONDS = 8.0
 TAKEOVER_GRACE_SECONDS = 2.0
 TAKEOVER_FAILURE_BACKOFF_SECONDS = 30.0
 TAKEOVER_SUCCESS_COOLDOWN_SECONDS = 15.0
-CODEX_PROCESS_NAMES = {"codexrebuild.exe", "codex.exe"}
-WATCHER_TAKEOVER_ENV = "CODEX_PLUS_PLUS_WATCHER_TAKEOVER"
 
 
 def data_root() -> Path:
@@ -68,6 +66,7 @@ def _run_powershell(script: str, timeout: float = 8.0) -> str:
 
 
 def find_codex_processes() -> list[int]:
+    expected_root = str(DEFAULT_APP_DIR).lower().replace("/", "\\")
     script = (
         f"Get-CimInstance Win32_Process -Filter \"{PROCESS_NAME_FILTER}\" "
         "| Select-Object ProcessId, ExecutablePath, CommandLine "
@@ -79,8 +78,7 @@ def find_codex_processes() -> list[int]:
         parts = line.split("\t", 2)
         if len(parts) < 2 or not parts[0].strip().isdigit():
             continue
-        executable_path = parts[1].lower().replace("/", "\\")
-        expected_root = str(DEFAULT_APP_DIR).lower().replace("/", "\\")
+        executable_path = parts[1].lower()
         if not executable_path.startswith(expected_root):
             continue
         pids.append(int(parts[0]))
@@ -144,26 +142,13 @@ def spawn_launcher(debug_port: int) -> subprocess.Popen | None:
         return None
 
 
-def takeover_enabled() -> bool:
-    return os.environ.get(WATCHER_TAKEOVER_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
-
-
 def stop_launcher_processes() -> None:
     script = (
         "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe' OR Name='python.exe'\" | "
-        "Where-Object { $_.CommandLine -match 'codex_session_delete\\s+launch' } | "
+        "Where-Object { $_.CommandLine -match 'codex_session_delete\\s+(start|launch)' } | "
         "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
     )
     _run_powershell(script, timeout=6.0)
-
-
-def launcher_process_active() -> bool:
-    script = (
-        "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe' OR Name='python.exe'\" | "
-        "Where-Object { $_.CommandLine -match 'codex_session_delete\\s+(start|launch)' } | "
-        "Select-Object -First 1 -ExpandProperty ProcessId"
-    )
-    return _run_powershell(script, timeout=4.0).strip().isdigit()
 
 
 def takeover(debug_port: int) -> bool:
@@ -215,7 +200,8 @@ def watch_loop(debug_port: int = DEFAULT_DEBUG_PORT) -> int:
         log("watcher only supported on Windows")
         return 1
 
-    log(f"watcher started (interval={WATCHER_INTERVAL_SECONDS}s, takeover_enabled={takeover_enabled()})")
+    takeover_enabled = os.environ.get("CODEX_PLUS_PLUS_WATCHER_TAKEOVER") == "1"
+    log(f"watcher started (interval={WATCHER_INTERVAL_SECONDS}s takeover_enabled={takeover_enabled})")
     last_state = None
     backoff_until = 0.0
     cooldown_until = 0.0
@@ -228,14 +214,6 @@ def watch_loop(debug_port: int = DEFAULT_DEBUG_PORT) -> int:
                 if last_state != "disabled":
                     log("disabled flag present; idling")
                 last_state = "disabled"
-                time.sleep(WATCHER_INTERVAL_SECONDS)
-                continue
-
-            if launcher_process_active():
-                if last_state != "launcher_active":
-                    log("Codex++ launcher is active; idling")
-                last_state = "launcher_active"
-                candidate_pids = None
                 time.sleep(WATCHER_INTERVAL_SECONDS)
                 continue
 
@@ -252,14 +230,6 @@ def watch_loop(debug_port: int = DEFAULT_DEBUG_PORT) -> int:
                 if last_state != "idle":
                     log("no Codex running; idling")
                 last_state = "idle"
-                candidate_pids = None
-                time.sleep(WATCHER_INTERVAL_SECONDS)
-                continue
-
-            if not takeover_enabled():
-                if last_state != "observing_without_takeover":
-                    log(f"Codex running without CDP (pids={codex_pids}); takeover disabled")
-                last_state = "observing_without_takeover"
                 candidate_pids = None
                 time.sleep(WATCHER_INTERVAL_SECONDS)
                 continue
@@ -301,6 +271,12 @@ def watch_loop(debug_port: int = DEFAULT_DEBUG_PORT) -> int:
                 continue
 
             log(f"Codex running without CDP after grace period (pids={codex_pids}); attempting takeover")
+            if not takeover_enabled:
+                if last_state != "takeover_disabled":
+                    log(f"Codex running without CDP (pids={codex_pids}); takeover disabled")
+                last_state = "takeover_disabled"
+                time.sleep(WATCHER_INTERVAL_SECONDS)
+                continue
             last_state = "takeover"
             success = takeover(debug_port)
             candidate_pids = None

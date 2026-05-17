@@ -6,10 +6,12 @@ import os
 import socket
 import subprocess
 import sys
+import time
 import traceback
 from datetime import datetime
 from pathlib import Path
 
+from codex_session_delete.cdp import list_targets, pick_page_target
 from codex_session_delete.helper_server import HelperServer
 from codex_session_delete.installers import InstallOptions, install_codex_plus_plus, uninstall_codex_plus_plus
 from codex_session_delete.launcher import launch_and_inject, shutdown_helper
@@ -21,13 +23,23 @@ from codex_session_delete.rebuild_config import (
     WATCHER_RUN_NAME,
     WATCHER_STARTUP_SHORTCUT_NAME,
 )
-from codex_session_delete import launcher, updater
+from codex_session_delete import launcher
+from codex_session_delete import updater
 from codex_session_delete import watcher
+
+
+def codex_home() -> Path:
+    configured = os.environ.get("CODEX_HOME")
+    return Path(configured).expanduser() if configured else Path.home() / ".codex"
+
+
+def default_db_path() -> Path:
+    return codex_home() / "state_5.sqlite"
 
 
 def add_launch_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--app-dir", type=Path, default=DEFAULT_APP_DIR)
-    parser.add_argument("--db", type=Path, default=Path.home() / ".codex" / "state_5.sqlite", help="SQLite database path for local deletion fallback")
+    parser.add_argument("--db", type=Path, default=default_db_path(), help="SQLite database path for local deletion fallback")
     parser.add_argument("--backup-dir", type=Path, default=Path.home() / HELPER_DATA_DIR_NAME / "backups")
     parser.add_argument("--debug-port", type=int, default=DEFAULT_DEBUG_PORT)
     parser.add_argument("--helper-port", type=int, default=57321)
@@ -116,7 +128,7 @@ def windows_rebuild_process_snapshot(app_dir: Path = DEFAULT_APP_DIR) -> list[di
     expected_root = str(app_dir).lower().replace("/", "\\")
     script = (
         "Get-CimInstance Win32_Process -Filter \"Name='CodexRebuild.exe' OR Name='Codex.exe' OR Name='codex.exe' OR Name='pythonw.exe' OR Name='python.exe'\" | "
-        f"Where-Object {{ ($_.ExecutablePath -and $_.ExecutablePath.ToLower().Replace('/','\\') -like '{expected_root}\\*') -or $_.CommandLine -match 'codex_session_delete\\s+(start|launch|watch)' }} | "
+        f"Where-Object {{ ($_.ExecutablePath -and $_.ExecutablePath.ToLower().Replace('/','\\') -like '{expected_root}\\*') -or $_.CommandLine -match 'codex_session_delete\\s+(start|launch|watch|attach)' }} | "
         "Select-Object ProcessId,Name,ExecutablePath,CommandLine | ConvertTo-Json -Compress"
     )
     result = subprocess.run(
@@ -147,73 +159,86 @@ def watchdog_status(server: HelperServer, debug_port: int | None, app_dir: Path)
     }
 
 
+def log_runtime_event(message: str) -> None:
+    path = launch_log_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"[{timestamp}] {message}\n")
+
+
 def log_launch_failure(exc: BaseException) -> None:
     path = launch_log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)), encoding="utf-8")
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(f"[{timestamp}] launch failed\n")
+        handle.write("".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
     append_watchdog_event("launch_failure", error=repr(exc))
 
 
-def wait_for_windows_process_id(process_id: int) -> int | None:
+def wait_for_windows_process_id(process_id: int) -> None:
     if sys.platform != "win32":
-        return None
+        return
     import ctypes
 
     synchronize = 0x00100000
-    query_limited_information = 0x00001000
     infinite = 0xFFFFFFFF
-    still_active = 259
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
     kernel32.OpenProcess.restype = ctypes.c_void_p
     kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
     kernel32.WaitForSingleObject.restype = ctypes.c_ulong
-    kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
-    kernel32.GetExitCodeProcess.restype = ctypes.c_int
     kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
     kernel32.CloseHandle.restype = ctypes.c_int
 
-    handle = kernel32.OpenProcess(synchronize | query_limited_information, False, process_id)
+    handle = kernel32.OpenProcess(synchronize, False, process_id)
     if not handle:
-        return None
+        return
     try:
         kernel32.WaitForSingleObject(handle, infinite)
-        exit_code = ctypes.c_ulong(still_active)
-        if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-            return int(exit_code.value)
-        return None
     finally:
         kernel32.CloseHandle(handle)
 
 
-def wait_for_shutdown(server: HelperServer, codex_proc) -> None:
-    debug_port = getattr(server, "watchdog_debug_port", None)
+def wait_for_shutdown(server: HelperServer, codex_proc, debug_port: int = DEFAULT_DEBUG_PORT) -> None:
     app_dir = getattr(server, "watchdog_app_dir", DEFAULT_APP_DIR)
     append_watchdog_event("wait_started", codex_proc=codex_proc if isinstance(codex_proc, int) else repr(codex_proc), **watchdog_status(server, debug_port, app_dir))
-    exit_code = None
     try:
         if isinstance(codex_proc, int):
-            exit_code = wait_for_windows_process_id(codex_proc)
+            wait_for_windows_process_id(codex_proc)
         elif codex_proc is None and sys.platform == "darwin":
             import time as _time
             while True:
-                if not is_macos_codex_running():
+                if not is_macos_codex_running(debug_port):
+                    log_runtime_event(f"macOS Codex liveness check failed debug_port={debug_port}")
                     break
                 _time.sleep(2)
         elif codex_proc is not None:
-            exit_code = codex_proc.wait()
+            codex_proc.wait()
     except KeyboardInterrupt:
         append_watchdog_event("wait_interrupted", **watchdog_status(server, debug_port, app_dir))
         pass
     finally:
-        append_watchdog_event("codex_exited", exit_code=exit_code, **watchdog_status(server, debug_port, app_dir))
+        append_watchdog_event("codex_exited", **watchdog_status(server, debug_port, app_dir))
         shutdown_helper(server)
-        append_watchdog_event("helper_shutdown", helper_port=server.port, helper_port_listening=loopback_listening(server.port))
 
 
-def is_macos_codex_running() -> bool:
+def is_macos_codex_running(debug_port: int = DEFAULT_DEBUG_PORT) -> bool:
+    return is_codex_cdp_page_available(debug_port) or is_macos_codex_process_running()
+
+
+def is_codex_cdp_page_available(debug_port: int = DEFAULT_DEBUG_PORT) -> bool:
+    try:
+        pick_page_target(list_targets(debug_port))
+        return True
+    except Exception:
+        return False
+
+
+def is_macos_codex_process_running() -> bool:
     result = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True, check=False)
-    return any("/Codex.app/Contents/MacOS/Codex " in f"{line} " for line in result.stdout.splitlines())
+    return any(".app/Contents/MacOS/Codex " in f"{line} " for line in result.stdout.splitlines())
 
 
 def stop_existing_windows_launchers() -> None:
@@ -249,12 +274,9 @@ def run_launch(args: argparse.Namespace) -> int:
     except Exception as exc:
         log_launch_failure(exc)
         raise
-    server.watchdog_debug_port = args.debug_port
-    server.watchdog_app_dir = args.app_dir
-    append_watchdog_event("launch_ready", **watchdog_status(server, args.debug_port, args.app_dir))
     print(f"Codex session delete helper running on http://127.0.0.1:{server.port}")
     print("Keep this terminal open while using the delete buttons. Press Ctrl+C to stop.")
-    wait_for_shutdown(server, codex_proc)
+    wait_for_shutdown(server, codex_proc, args.debug_port)
     return 0
 
 
@@ -263,8 +285,8 @@ def watcher_process_running(debug_port: int) -> bool:
         return False
     script = (
         "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe' OR Name='python.exe'\" | "
-        "Where-Object {{ $_.CommandLine -match 'codex_session_delete\\s+watch(\\s|$)' -and "
-        "$_.CommandLine -match '--debug-port\\s+{}(\\s|$)' }} | "
+        "Where-Object {{ $_.CommandLine -match 'codex_session_delete\\s+watch' -and "
+        "$_.CommandLine -match '--debug-port\\s+{}' }} | "
         "Select-Object -First 1 -ExpandProperty ProcessId"
     ).format(debug_port)
     result = subprocess.run(
@@ -276,7 +298,7 @@ def watcher_process_running(debug_port: int) -> bool:
         errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-    return result.stdout.strip().isdigit()
+    return bool(result.stdout.strip())
 
 
 def start_watcher_background(debug_port: int) -> None:
@@ -323,27 +345,52 @@ def run_attach(args: argparse.Namespace) -> int:
         ),
         debug_port,
     )
-    server = launcher.start_helper(service, export_service, port=helper_port)
+    server = launcher.start_or_attach_helper(service, export_service, port=helper_port)
     codex_proc = launcher.running_windows_codex_process_id(app_dir)
     try:
         script_path = Path(launcher.__file__).parent / "inject" / "renderer-inject.js"
-        server.bridge_socket = launcher.inject_with_retry(
-            debug_port,
-            script_path,
-            server.port,
-            service,
-            export_service,
-            runtime,
-        )
+        while True:
+            try:
+                server.bridge_socket = launcher.inject_with_retry(
+                    debug_port,
+                    script_path,
+                    server.port,
+                    service,
+                    export_service,
+                    runtime,
+                    attempts=6,
+                    delay=1.0,
+                )
+                break
+            except Exception as exc:
+                if codex_proc is not None and sys.platform == "win32" and not windows_process_alive(codex_proc):
+                    raise
+                append_watchdog_event("attach_retry", error=repr(exc), **watchdog_status(server, debug_port, app_dir))
+                time.sleep(3)
+        launcher.start_bridge_watchdog(debug_port, script_path, server.port, service, export_service, runtime)
         server.watchdog_debug_port = debug_port
         server.watchdog_app_dir = app_dir
         append_watchdog_event("attach_ready", **watchdog_status(server, debug_port, app_dir))
-        wait_for_shutdown(server, codex_proc)
+        wait_for_shutdown(server, codex_proc, debug_port)
     except Exception as exc:
         log_launch_failure(exc)
         shutdown_helper(server)
         raise
     return 0
+
+
+def windows_process_alive(process_id: int) -> bool:
+    script = f"Get-CimInstance Win32_Process -Filter \"ProcessId={process_id}\" | Select-Object -First 1 -ExpandProperty ProcessId"
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    return result.stdout.strip().isdigit()
 
 
 def print_release_notice(release: updater.Release) -> None:
@@ -419,7 +466,7 @@ $RunFullCommand = {_ps_quote(full_command)}
 $ProjectRoot = {_ps_quote(project_root)}
 $ShortcutName = {_ps_quote(WATCHER_STARTUP_SHORTCUT_NAME)}
 # 1) HKCU Run value
-if (-not (Test-Path '{WATCHER_RUN_KEY}')) {{ New-Item -Path '{WATCHER_RUN_KEY}' -Force | Out-Null }}
+New-Item -Path '{WATCHER_RUN_KEY}' -Force | Out-Null
 Set-ItemProperty -Path '{WATCHER_RUN_KEY}' -Name '{WATCHER_RUN_NAME}' -Value $RunFullCommand
 # 2) Startup folder .lnk (survives registry cleanups)
 $Startup = [Environment]::GetFolderPath('Startup')
@@ -431,7 +478,7 @@ $Shortcut.TargetPath = $Exe
 $Shortcut.Arguments = $Args
 $Shortcut.WorkingDirectory = $ProjectRoot
 $Shortcut.WindowStyle = 7
-$Shortcut.Description = {_ps_quote(WATCHER_DESCRIPTION)}
+$Shortcut.Description = 'Codex++ watcher (auto-inject Codex on start)'
 $Shortcut.Save()
 # 3) Echo what was written for verification
 $runValue = (Get-ItemProperty -Path '{WATCHER_RUN_KEY}' -Name '{WATCHER_RUN_NAME}').'{WATCHER_RUN_NAME}'

@@ -622,7 +622,7 @@ function getRebuildPlusPlusAutoStartRuntimeSnippet() {
   return [
     "if(!process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE){process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE=`1`;try{",
     "let e=require(`node:fs`),t=require(`node:path`),i=require(`node:child_process`),a=t.join(process.resourcesPath,`CodexPlusPlus`),o=t.join(a,`codex_session_delete`,`cli.py`);",
-    `n.app.commandLine.appendSwitch(\`remote-debugging-port\`,\`${port}\`),n.app.commandLine.appendSwitch(\`remote-allow-origins\`,\`http://127.0.0.1:${port}\`);`,
+    `n.app.commandLine.appendSwitch(\`remote-debugging-port\`,\`${port}\`),n.app.commandLine.appendSwitch(\`remote-debugging-address\`,\`127.0.0.1\`),n.app.commandLine.appendSwitch(\`remote-allow-origins\`,\`http://127.0.0.1:${port}\`);`,
     "if(e.existsSync(o)){let e=process.env.CODEX_PLUS_PLUS_PYTHON||`D:\\\\Python3.11.1\\\\pythonw.exe`,n=e.toLowerCase().endsWith(`pythonw.exe`)||e.toLowerCase().endsWith(`python.exe`)?[e]:[`pythonw.exe`],s={...process.env,PYTHONPATH:a+(process.env.PYTHONPATH?`;`+process.env.PYTHONPATH:``),CODEX_PLUS_PLUS_WATCHER_TAKEOVER:``};",
     `for(let e of n){try{i.spawn(e,[\`-m\`,\`codex_session_delete\`,\`attach\`,\`--app-dir\`,t.dirname(process.execPath),\`--debug-port\`,\`${port}\`],{cwd:a,env:s,detached:!0,stdio:\`ignore\`,windowsHide:!0}).unref(),globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(\`plusplus-attach\`,\`python=\${e}\`);break}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(\`plusplus-attach-failed\`,e&&e.message||String(e))}}}`,
     "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`plusplus-autostart-error`,e&&e.stack||String(e))}}",
@@ -631,10 +631,16 @@ function getRebuildPlusPlusAutoStartRuntimeSnippet() {
 
 function patchBootstrapRebuildPlusPlusAutoStart(text) {
   if (text.includes("CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE")) {
-    const refreshed = text
+    let refreshed = text
       .replaceAll("`9239`", "`19339`")
       .replaceAll("http://127.0.0.1:9239", "http://127.0.0.1:19339")
       .replaceAll("--debug-port`,`9239`", "--debug-port`,`19339`");
+    if (!refreshed.includes("remote-debugging-address")) {
+      refreshed = refreshed.replace(
+        "n.app.commandLine.appendSwitch(`remote-debugging-port`,`19339`),n.app.commandLine.appendSwitch(`remote-allow-origins`,`http://127.0.0.1:19339`);",
+        "n.app.commandLine.appendSwitch(`remote-debugging-port`,`19339`),n.app.commandLine.appendSwitch(`remote-debugging-address`,`127.0.0.1`),n.app.commandLine.appendSwitch(`remote-allow-origins`,`http://127.0.0.1:19339`);"
+      );
+    }
     if (refreshed !== text) {
       console.log("   [plusplus] refreshed bootstrap PlusPlus attach port");
     }

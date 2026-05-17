@@ -37,21 +37,17 @@ def _project_root_expr() -> str:
 
 
 def _icon_path_expr() -> str:
-    rebuild_exe = DEFAULT_APP_DIR / "CodexRebuild.exe"
-    if rebuild_exe.exists():
-        return _ps_quote(str(rebuild_exe))
     return _ps_quote(str(Path(__file__).resolve().parent / "assets" / "codex-plus-plus.ico"))
 
 
 def _split_launcher_command(command: str) -> tuple[str, str]:
     python_module = " -m codex_session_delete start"
     if python_module in command:
-        index = command.index(python_module)
-        return command[:index], command[index + 1:]
+        before, after = command.split(python_module, 1)
+        return before, python_module.strip() + after
     python_module = " -m codex_session_delete launch"
-    if python_module in command:
-        index = command.index(python_module)
-        return command[:index], command[index + 1:]
+    if command.endswith(python_module):
+        return command[: -len(python_module)], python_module.strip()
     prefix = "python "
     if command.startswith(prefix):
         return "python", command[len(prefix):]
@@ -77,7 +73,7 @@ $Shortcut = $Shell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = $LauncherPython
 $Shortcut.Arguments = {arguments_expr}
 $Shortcut.WorkingDirectory = $ProjectRoot
-$Shortcut.Description = 'Launch CodexRebuild with CodexRebuild++ injection'
+$Shortcut.Description = 'Launch Codex with Codex++ injection'
 $Shortcut.IconLocation = $CodexPlusIcon
 $Shortcut.Save()
 $LegacyUninstallKey = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Codex++'

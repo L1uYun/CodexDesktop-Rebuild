@@ -1,7 +1,9 @@
+import sys
 from pathlib import Path
 
 from codex_session_delete.installers import InstallOptions
 from codex_session_delete import __version__
+from codex_session_delete.rebuild_config import DEFAULT_DEBUG_PORT, SHORTCUT_NAME, UNINSTALL_DISPLAY_NAME, UNINSTALL_KEY_NAME
 from codex_session_delete.windows_installer import build_install_shortcut_script, build_uninstall_shortcut_script
 
 
@@ -10,8 +12,8 @@ def test_build_install_shortcut_script_contains_codex_plus_shortcuts(tmp_path):
 
     script = build_install_shortcut_script(options)
 
-    assert "CodexRebuild++.lnk" in script
-    assert "CodexRebuild.exe" in script
+    assert SHORTCUT_NAME in script
+    assert "codex-plus-plus.ico" in script
     assert "-m codex_session_delete launch" in script
     assert "CreateShortcut" in script
     assert "$Shortcut.TargetPath = $LauncherPython" in script
@@ -22,12 +24,13 @@ def test_build_install_shortcut_script_contains_codex_plus_shortcuts(tmp_path):
     assert "-EncodedCommand" not in script
     assert "powershell.exe" not in script
     assert "WorkingDirectory = $ProjectRoot" in script
+    assert "codex-plus-plus.ico" in script
     assert "Codex.exe" not in script
     assert "IconLocation = $CodexPlusIcon" in script
     assert "$Python,0" not in script
     assert str(Path.cwd()) in script
-    assert "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\CodexRebuildPlusPlus" in script
-    assert "CodexRebuild++" in script
+    assert f"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{UNINSTALL_KEY_NAME}" in script
+    assert UNINSTALL_DISPLAY_NAME in script
     assert "DisplayName" in script
     assert "DisplayIcon" in script
     assert "UninstallString" in script
@@ -45,10 +48,10 @@ def test_default_windows_launcher_uses_current_python_executable(tmp_path):
     assert "$Python = " not in script
     assert "Get-Command python" not in script
     assert "-m codex_session_delete start" in script
-    assert "--app-dir" in script
-    assert "D:\\software\\CodexRebuild" in script
-    assert "--debug-port 19339" in script
-    assert "pythonw.exe" in script or "python.exe" in script
+    assert f"--debug-port {DEFAULT_DEBUG_PORT}" in script
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    expected_python = pythonw if pythonw.exists() else Path(sys.executable)
+    assert str(expected_python) in script
 
 
 def test_build_uninstall_shortcut_script_removes_codex_plus_shortcuts(tmp_path):
@@ -56,6 +59,6 @@ def test_build_uninstall_shortcut_script_removes_codex_plus_shortcuts(tmp_path):
 
     script = build_uninstall_shortcut_script(options)
 
-    assert "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\CodexRebuildPlusPlus" in script
+    assert f"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{UNINSTALL_KEY_NAME}" in script
     assert "Remove-Item" in script
     assert str(tmp_path) in script
