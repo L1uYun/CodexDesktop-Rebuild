@@ -29,7 +29,7 @@ After every official Codex update, Rebuild should:
 - Keep Archived chats usable from local `archived_sessions` when ChatGPT cloud
   task history is unreachable.
 - Auto-start bundled CodexPlusPlus attach when `CodexRebuild.exe` launches, with
-  CDP enabled on port `19339` and a visible Codex++ button in the upper-right
+  CDP enabled on port `19439` and a visible Codex++ button in the upper-right
   corner.
 
 ## Official App Discovery
@@ -124,7 +124,7 @@ The previous flash/crash loop was not caused by the Rebuild launcher itself. It
 was caused by the CodexPlusPlus watcher takeover path:
 
 ```text
-pythonw.exe -m codex_session_delete watch --debug-port 19339
+pythonw.exe -m codex_session_delete watch --debug-port 19439
 ```
 
 The old watcher killed a normally started `CodexRebuild.exe` and relaunched it
@@ -140,7 +140,7 @@ creates windows, bundles `resources\CodexPlusPlus`, then attaches to the already
 running Rebuild process:
 
 ```text
-pythonw.exe -m codex_session_delete attach --app-dir D:\software\CodexRebuild --debug-port 19339
+pythonw.exe -m codex_session_delete attach --app-dir D:\software\CodexRebuild --debug-port 19439
 ```
 
 For Rebuild, CodexPlusPlus process discovery and cleanup must stay scoped to
@@ -155,7 +155,7 @@ Only use the legacy watcher takeover intentionally for debugging:
 
 ```powershell
 $env:CODEX_PLUS_PLUS_WATCHER_TAKEOVER = "1"
-python -m codex_session_delete watch --debug-port 19339
+python -m codex_session_delete watch --debug-port 19439
 ```
 
 ## Stability Verification
@@ -183,9 +183,9 @@ Expected result:
 
 - Main `CodexRebuild.exe` remains alive.
 - It may briefly report `Responding=False` during startup, but it should recover.
-- Renderer processes should carry `--remote-debugging-port=19339`.
+- Renderer processes should carry `--remote-debugging-port=19439`.
 - No second top-level Rebuild relaunch should be spawned by Python.
-- One `pythonw.exe -m codex_session_delete attach ... --debug-port 19339` helper
+- One `pythonw.exe -m codex_session_delete attach ... --debug-port 19439` helper
   should stay alive while Rebuild is running.
 - `codex-rebuild.exe app-server --analytics-default-enabled` remains under
   Rebuild.
@@ -384,7 +384,7 @@ Get-CimInstance Win32_Process |
 If the parent is:
 
 ```text
-pythonw.exe -m codex_session_delete launch --app-dir D:\software\CodexRebuild --debug-port 19339
+pythonw.exe -m codex_session_delete launch --app-dir D:\software\CodexRebuild --debug-port 19439
 ```
 
 then the legacy watcher is still doing takeover. Update `CodexPlusPlus/` and

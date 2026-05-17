@@ -623,7 +623,7 @@ function patchBootstrapRebuildRuntimeEnv(text) {
 }
 
 function getRebuildPlusPlusAutoStartRuntimeSnippet() {
-  const port = "19339";
+  const port = "19439";
   return [
     "if(!process.env.CODEX_REBUILD_PLUS_PLUS_LAUNCHED&&!process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE){process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE=`1`;try{",
     "let e=require(`node:fs`),t=require(`node:path`),i=require(`node:child_process`),a=t.join(process.resourcesPath,`CodexPlusPlus`),o=t.join(a,`codex_session_delete`,`cli.py`);",
@@ -640,11 +640,14 @@ function patchBootstrapRebuildPlusPlusAutoStart(text) {
       .replaceAll("if(!process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE){", "if(!process.env.CODEX_REBUILD_PLUS_PLUS_LAUNCHED&&!process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE){")
       .replaceAll("`9239`", "`19339`")
       .replaceAll("http://127.0.0.1:9239", "http://127.0.0.1:19339")
-      .replaceAll("--debug-port`,`9239`", "--debug-port`,`19339`");
+      .replaceAll("--debug-port`,`9239`", "--debug-port`,`19339`")
+      .replaceAll("`19339`", "`19439`")
+      .replaceAll("http://127.0.0.1:19339", "http://127.0.0.1:19439")
+      .replaceAll("--debug-port`,`19339`", "--debug-port`,`19439`");
     if (!refreshed.includes("remote-debugging-address")) {
       refreshed = refreshed.replace(
-        "n.app.commandLine.appendSwitch(`remote-debugging-port`,`19339`),n.app.commandLine.appendSwitch(`remote-allow-origins`,`http://127.0.0.1:19339`);",
-        "n.app.commandLine.appendSwitch(`remote-debugging-port`,`19339`),n.app.commandLine.appendSwitch(`remote-debugging-address`,`127.0.0.1`),n.app.commandLine.appendSwitch(`remote-allow-origins`,`http://127.0.0.1:19339`);"
+        "n.app.commandLine.appendSwitch(`remote-debugging-port`,`19439`),n.app.commandLine.appendSwitch(`remote-allow-origins`,`http://127.0.0.1:19439`);",
+        "n.app.commandLine.appendSwitch(`remote-debugging-port`,`19439`),n.app.commandLine.appendSwitch(`remote-debugging-address`,`127.0.0.1`),n.app.commandLine.appendSwitch(`remote-allow-origins`,`http://127.0.0.1:19439`);"
       );
     }
     if (refreshed !== text) {
