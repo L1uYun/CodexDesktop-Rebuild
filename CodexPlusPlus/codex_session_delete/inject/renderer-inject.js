@@ -132,7 +132,8 @@
       if (body) {
         state.spriteRow ||= getComputedStyle(body).backgroundPosition.split(" ")[1] || "87.5%";
         const frameIndex = Math.floor(now / 115) % 8;
-        body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${state.spriteRow}`;
+        const crawlRow = state.heading < 0 ? "25%" : "87.5%";
+        body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${crawlRow}`;
       }
       const pointer = window.__codexAvatarBionicPointer;
       const rect = target.getBoundingClientRect();
@@ -150,7 +151,6 @@
       }
       const stridePhase = Math.min(1, Math.max(0, (now - state.strideStart) / state.strideDuration));
       const legBeat = Math.sin(stridePhase * Math.PI * 2);
-      const alternatingFeet = Math.sin(stridePhase * Math.PI * 4);
       const bodyLift = Math.max(0, Math.sin(stridePhase * Math.PI)) * -1.8;
       const lateralSway = legBeat * 1.6;
       const microPause = stridePhase > 0.72 ? 0.55 : 1;
@@ -166,11 +166,9 @@
       state.y = boundedOffset.y;
       if (Math.abs(boundedOffset.x - desiredX) > 1) state.heading *= -1;
       const rotate = Math.max(-5, Math.min(5, state.vx * 1.1 + lateralSway * 0.7));
-      const scaleX = 1 + Math.abs(alternatingFeet) * 0.014;
-      const scaleY = 1 - Math.abs(alternatingFeet) * 0.018;
       target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg)`;
       if (body) {
-        body.style.transform = `translate3d(0, ${(bodyLift + Math.abs(alternatingFeet) * 1.4).toFixed(2)}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
+        body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;
       }
       window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);
     }

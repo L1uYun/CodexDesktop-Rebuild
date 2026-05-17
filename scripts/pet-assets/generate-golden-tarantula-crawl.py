@@ -35,11 +35,11 @@ def load_base() -> tuple[Image.Image, tuple[int, int], int, int]:
     bbox = image.getchannel("A").getbbox()
     if bbox is None:
         raise SystemExit(f"source has no visible pixels: {SOURCE}")
-    trim = image.crop(bbox)
-    scale = min(178 / trim.width, 178 / trim.height)
+    trim = image.crop(bbox).rotate(90, expand=True, resample=Image.Resampling.BICUBIC)
+    scale = min(178 / trim.width, 150 / trim.height)
     sprite = trim.resize((round(trim.width * scale), round(trim.height * scale)), Image.Resampling.LANCZOS)
     cell = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
-    pos = ((CELL_W - sprite.width) // 2, 18)
+    pos = ((CELL_W - sprite.width) // 2, (CELL_H - sprite.height) // 2)
     cell.alpha_composite(sprite, pos)
     return cell, pos, sprite.width, sprite.height
 
@@ -51,14 +51,14 @@ def split_layers(base: Image.Image, base_pos: tuple[int, int], base_w: int, base
         mask = Image.new("L", (CELL_W, CELL_H), 0)
         points = [(base_pos[0] + x * base_w, base_pos[1] + y * base_h) for x, y in polygon]
         ImageDraw.Draw(mask).polygon(points, fill=255)
-        mask = mask.filter(ImageFilter.GaussianBlur(1.0))
+        mask = mask.filter(ImageFilter.GaussianBlur(0.45))
         layer = Image.new("RGBA", (CELL_W, CELL_H), (0, 0, 0, 0))
         layer.alpha_composite(base)
         layer.putalpha(ImageChops.multiply(base.getchannel("A"), mask))
         leg_layers.append(layer)
         leg_union = ImageChops.lighter(leg_union, mask)
     body = base.copy()
-    body.putalpha(ImageChops.subtract(base.getchannel("A"), leg_union.point(lambda p: min(235, p))))
+    body.putalpha(ImageChops.subtract(base.getchannel("A"), leg_union.point(lambda p: 255 if p > 18 else 0)))
     return body, leg_layers
 
 
@@ -91,14 +91,14 @@ def make_frame(
     frame.alpha_composite(body_layer)
     for index, layer in enumerate(leg_layers):
         wave = math.sin(phase * math.tau + PARITY[index] * math.pi / 2)
-        degrees = wave * 6.5 * strength
+        degrees = wave * 3.8 * strength
         if index in (3, 7):
             degrees *= 0.65
         if idle:
             degrees *= 0.22
         leg = rotate_layer(layer, degrees, ANCHORS[index], base_pos, base_w, base_h)
-        travel = 2.2 * wave * strength * (1 if index < 4 else -1)
-        lift = -1.2 * abs(wave) * strength
+        travel = 1.3 * wave * strength * (1 if index < 4 else -1)
+        lift = -0.7 * abs(wave) * strength
         if idle:
             travel *= 0.2
             lift *= 0.15
