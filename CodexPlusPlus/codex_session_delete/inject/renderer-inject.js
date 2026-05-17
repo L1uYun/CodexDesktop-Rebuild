@@ -66,7 +66,7 @@
     if (!isAvatarOverlayPage()) return;
     const target = document.querySelector(".codex-avatar-button");
     const body = target?.querySelector?.(".codex-avatar-root");
-    const motionVersion = "4";
+    const motionVersion = "5";
     if (!target) {
       clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
       window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);

@@ -47,6 +47,17 @@ def test_avatar_move_uses_official_overlay_ipc(monkeypatch):
     ]
 
 
+def test_avatar_cursor_repulsion_pushes_away_from_near_cursor():
+    repel_x, repel_y = launcher._avatar_cursor_repulsion(100, 100, (80, 100))
+
+    assert repel_x > 0
+    assert abs(repel_y) < 0.001
+
+
+def test_avatar_cursor_repulsion_ignores_far_cursor():
+    assert launcher._avatar_cursor_repulsion(100, 100, (400, 100)) == (0.0, 0.0)
+
+
 def test_avatar_random_walk_moves_avatar_target_inside_primary_work_area(monkeypatch):
     calls = []
     times = iter([10.0, 10.12])
@@ -62,6 +73,7 @@ def test_avatar_random_walk_moves_avatar_target_inside_primary_work_area(monkeyp
     )
     monkeypatch.setattr(launcher.time, "monotonic", lambda: next(times))
     monkeypatch.setattr(launcher.random, "uniform", lambda start, end: 0.0 if start < 0 else 50.0)
+    monkeypatch.setattr(launcher, "_cursor_position", lambda: None)
     monkeypatch.setattr(launcher, "_avatar_window_bounds", lambda websocket_url: {"left": 100, "top": 100, "width": 356, "height": 320})
     monkeypatch.setattr(launcher, "_move_avatar_window", lambda websocket_url, left, top: calls.append((websocket_url, left, top)))
     monkeypatch.setattr(launcher, "_set_avatar_walk_direction", lambda websocket_url, direction: calls.append(("direction", websocket_url, direction)))
@@ -94,6 +106,7 @@ def test_avatar_random_walk_targets_primary_when_dragged_to_secondary(monkeypatc
     )
     monkeypatch.setattr(launcher.time, "monotonic", lambda: next(times))
     monkeypatch.setattr(launcher.random, "uniform", lambda start, end: 0.0 if start < 0 else 50.0)
+    monkeypatch.setattr(launcher, "_cursor_position", lambda: None)
     monkeypatch.setattr(launcher, "_avatar_window_bounds", lambda websocket_url: {"left": 2200, "top": 100, "width": 356, "height": 320})
     monkeypatch.setattr(launcher, "_move_avatar_window", lambda websocket_url, left, top: calls.append((websocket_url, left, top)))
     monkeypatch.setattr(launcher, "_set_avatar_walk_direction", lambda websocket_url, direction: calls.append(("direction", websocket_url, direction)))
@@ -105,3 +118,30 @@ def test_avatar_random_walk_targets_primary_when_dragged_to_secondary(monkeypatc
     direction_calls = [call for call in calls if call[0] == "direction"]
     assert move_calls[-1][1] < 2200
     assert direction_calls[-1][2] == 4
+
+
+def test_avatar_random_walk_steers_away_from_cursor(monkeypatch):
+    calls = []
+    times = iter([10.0, 10.12])
+    monkeypatch.setattr(
+        launcher.cdp,
+        "list_targets",
+        lambda port: [{"type": "page", "url": "app://-/index.html?initialRoute=%2Favatar-overlay", "id": "avatar", "webSocketDebuggerUrl": "ws://avatar"}],
+    )
+    monkeypatch.setattr(
+        launcher,
+        "_windows_monitors",
+        lambda: [{"rect": (0, 0, 1920, 1080), "work": (0, 0, 1920, 1040), "primary": True}],
+    )
+    monkeypatch.setattr(launcher.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(launcher.random, "uniform", lambda start, end: 0.0 if start < 0 else 16.0)
+    monkeypatch.setattr(launcher, "_avatar_window_bounds", lambda websocket_url: {"left": 300, "top": 300, "width": 100, "height": 100})
+    monkeypatch.setattr(launcher, "_cursor_position", lambda: (300, 350))
+    monkeypatch.setattr(launcher, "_move_avatar_window", lambda websocket_url, left, top: calls.append((websocket_url, left, top)))
+    monkeypatch.setattr(launcher, "_set_avatar_walk_direction", lambda websocket_url, direction: None)
+
+    state = {}
+    assert launcher.move_avatar_window_once(19339, state) is True
+    assert launcher.move_avatar_window_once(19339, state) is True
+
+    assert calls[-1][1] > 300

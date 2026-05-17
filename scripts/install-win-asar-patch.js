@@ -65,6 +65,7 @@ function computeAsarHeaderHash(asarPath) {
 
 function patchExeHash(exePath, oldHash, newHash) {
   if (!fs.existsSync(exePath)) return "missing";
+  if (oldHash === newHash) return "unchanged";
   const buf = fs.readFileSync(exePath);
   const text = buf.toString("latin1");
   const integrityRe = /(\[\{"file":"resources\\\\app\.asar","alg":"SHA256","value":")([a-f0-9]{64})("\}\])/;

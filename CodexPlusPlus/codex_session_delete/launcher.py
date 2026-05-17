@@ -947,6 +947,11 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         primary_y = min(max(primary_work[1], state["y"]), max(primary_work[1], primary_work[3] - height))
         steer_x += max(-3.0, min(3.0, (primary_x - state["x"]) / 260.0))
         steer_y += max(-2.0, min(2.0, (primary_y - state["y"]) / 260.0))
+    cursor = _cursor_position()
+    if cursor is not None:
+        repel_x, repel_y = _avatar_cursor_repulsion(state["x"] + width / 2, state["y"] + height / 2, cursor)
+        steer_x += repel_x
+        steer_y += repel_y
     vx += steer_x * 38.0
     vy += steer_y * 30.0
     if abs(steer_x) > 0.4 or abs(steer_y) > 0.4:
@@ -1013,6 +1018,34 @@ def _move_avatar_window(websocket_url: str, left: int, top: int) -> None:
 
 def _set_avatar_walk_direction(websocket_url: str, direction_sector: int) -> None:
     evaluate_script(websocket_url, f"window.__codexAvatarWalkDirection = {int(direction_sector) % 8};")
+
+
+def _cursor_position() -> tuple[float, float] | None:
+    if sys.platform != "win32":
+        return None
+
+    class POINT(ctypes.Structure):
+        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+    point = POINT()
+    if not ctypes.WinDLL("user32", use_last_error=True).GetCursorPos(ctypes.byref(point)):
+        return None
+    return (float(point.x), float(point.y))
+
+
+def _avatar_cursor_repulsion(center_x: float, center_y: float, cursor: tuple[float, float]) -> tuple[float, float]:
+    dx = center_x - cursor[0]
+    dy = center_y - cursor[1]
+    distance = math.hypot(dx, dy)
+    radius = 160.0
+    if distance <= 0.001 or distance >= radius:
+        return (0.0, 0.0)
+    unit_x = dx / distance
+    unit_y = dy / distance
+    strength = ((radius - distance) / radius) ** 2
+    if distance < 70.0:
+        strength += (70.0 - distance) / 70.0
+    return (unit_x * strength * 2.4, unit_y * strength * 2.0)
 
 
 def _browser_websocket_url(debug_port: int) -> str:

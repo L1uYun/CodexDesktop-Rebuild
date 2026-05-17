@@ -663,7 +663,7 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "function installAvatarBionicMotion" in text
     assert 'document.querySelector(".codex-avatar-button")' in text
     assert "dataset.codexAvatarBionicMotion" in text
-    assert 'const motionVersion = "4"' in text
+    assert 'const motionVersion = "5"' in text
     assert "__codexAvatarBionicMotionRetryTimer" in text
     assert "setTimeout(installAvatarBionicMotion, 250)" in text
     assert "requestAnimationFrame(step)" in text
