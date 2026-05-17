@@ -663,8 +663,8 @@ function patchBootstrapRebuildPlusPlusAutoStart(text) {
 
 function getRebuildAvatarAutoOpenRuntimeSnippet() {
   return [
-    "(()=>{if(globalThis.__codexRebuildAvatarAutoOpenVersion!==3){globalThis.__codexRebuildAvatarAutoOpenVersion=3;try{",
-    "setTimeout(()=>{try{if(we&&!we.isDestroyed())M.avatarOverlayManager.open(we.webContents).then(()=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official`)},e=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official-failed`,e&&e.stack||String(e))})}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official-error`,e&&e.stack||String(e))}},1200);",
+    "(()=>{if(globalThis.__codexRebuildAvatarAutoOpenVersion!==4){globalThis.__codexRebuildAvatarAutoOpenVersion=4;try{",
+    "setTimeout(()=>{try{if(we&&!we.isDestroyed())M.avatarOverlayManager.open(we.webContents).then(()=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official`)},e=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official-failed`,e&&e.stack||String(e))})}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-official-error`,e&&e.stack||String(e))}},4000);",
     "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-install-failed`,e&&e.stack||String(e))}}})()",
   ].join("");
 }
@@ -702,11 +702,12 @@ function patchRebuildAvatarAutoOpen(asarDir) {
     if (!/^main.*\.js$/.test(entry)) continue;
     const filePath = path.join(buildDir, entry);
     let text = fs.readFileSync(filePath, "utf-8");
-    const legacyStart = text.indexOf(",if(globalThis.__codexRebuildAvatarAutoOpenVersion");
+    const legacyStart = text.indexOf(",(()=>{if(globalThis.__codexRebuildAvatarAutoOpenVersion");
     const legacyEndNeedle = ",A=Date.now(),await oe.deepLinks.flushPendingDeepLinks()";
     if (legacyStart >= 0) {
       const legacyEnd = text.indexOf(legacyEndNeedle, legacyStart);
       if (legacyEnd > legacyStart) {
+        console.log("   [avatar] upgraded Rebuild avatar auto-open");
         text = `${text.slice(0, legacyStart)}${text.slice(legacyEnd)}`;
       }
     }

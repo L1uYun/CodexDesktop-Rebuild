@@ -348,6 +348,7 @@ def run_attach(args: argparse.Namespace) -> int:
     server = launcher.start_or_attach_helper(service, export_service, port=helper_port)
     codex_proc = launcher.running_windows_codex_process_id(app_dir)
     try:
+        time.sleep(4.0)
         script_path = Path(launcher.__file__).parent / "inject" / "renderer-inject.js"
         while True:
             try:
