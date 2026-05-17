@@ -77,6 +77,7 @@ function main() {
   runPatchScript("patch-browser-tool-call-guidance.js");
   runPatchScript("patch-heartbeat-automation-feature.js");
   runPatchScript("patch-rebuild-windows-thread-path-preflight.js");
+  runPatchScript("build-from-upstream.js", ["--platform", "win", "--patch-only"]);
   patchExternalBrowserClients(installDir);
 
   const oldHash = computeAsarHeaderHash(asarPath);

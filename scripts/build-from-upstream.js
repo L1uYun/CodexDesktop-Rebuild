@@ -502,6 +502,7 @@ function patchRebuildBootstrap(asarDir) {
     text = patchBootstrapWindowsStatePathPreflight(text);
     text = patchBootstrapRebuildRuntimeEnv(text);
     text = patchBootstrapRebuildLifecycleTrace(text);
+    text = patchBootstrapRebuildAvatarAutoOpen(text);
     text = patchBootstrapRebuildPlusPlusAutoStart(text);
     text = patchBootstrapAppUserModelOverride(text);
     text = patchBootstrapRebuildProductNameOverride(text);
@@ -532,6 +533,7 @@ function patchRebuildBootstrap(asarDir) {
   text = patchBootstrapWindowsStatePathPreflight(text);
   text = patchBootstrapRebuildRuntimeEnv(text);
   text = patchBootstrapRebuildLifecycleTrace(text);
+  text = patchBootstrapRebuildAvatarAutoOpen(text);
   text = patchBootstrapRebuildPlusPlusAutoStart(text);
   text = patchBootstrapAppUserModelOverride(text);
   text = patchBootstrapRebuildProductNameOverride(text);
@@ -653,6 +655,40 @@ function patchBootstrapRebuildPlusPlusAutoStart(text) {
   }
   console.log("   [plusplus] patched bootstrap PlusPlus attach autostart");
   return text.replace(homeExpr, `${getRebuildPlusPlusAutoStartRuntimeSnippet()}${homeExpr}`);
+}
+
+function getRebuildAvatarAutoOpenRuntimeSnippet() {
+  return [
+    "if(globalThis.__codexRebuildAvatarAutoOpenVersion!==2){globalThis.__codexRebuildAvatarAutoOpenVersion=2;try{",
+    "let __codexRebuildOpenAvatar=()=>{try{",
+    "if(globalThis.__codexRebuildAvatarWindow&&!globalThis.__codexRebuildAvatarWindow.isDestroyed())return;",
+    "let e=new n.BrowserWindow({width:356,height:320,show:false,frame:false,transparent:true,skipTaskbar:true,resizable:false,alwaysOnTop:true,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}});",
+    "globalThis.__codexRebuildAvatarWindow=e;e.setMenuBarVisibility&&e.setMenuBarVisibility(false);e.setAlwaysOnTop&&e.setAlwaysOnTop(true,`floating`);e.once(`ready-to-show`,()=>{try{e.show()}catch{}});e.loadURL(`app://-/index.html?initialRoute=%2Favatar-overlay`).catch(t=>{globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-load-failed`,t&&t.stack||String(t));try{e.destroy()}catch{}});",
+    "globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-created`);",
+    "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-failed`,e&&e.stack||String(e))}};",
+    "let __codexRebuildScheduleAvatar=()=>{if(globalThis.__codexRebuildAvatarAutoOpenTimer)return;globalThis.__codexRebuildAvatarAutoOpenTimer=setTimeout(()=>{globalThis.__codexRebuildAvatarAutoOpenTimer=null;__codexRebuildOpenAvatar()},4500)};",
+    "n.app.on(`browser-window-created`,__codexRebuildScheduleAvatar);n.app.whenReady().then(()=>setTimeout(__codexRebuildScheduleAvatar,6500));",
+    "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`avatar-auto-open-install-failed`,e&&e.stack||String(e))}}",
+  ].join("");
+}
+
+function patchBootstrapRebuildAvatarAutoOpen(text) {
+  const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  const legacyStart = text.indexOf("if(!globalThis.__codexRebuildAvatarAutoOpenInstalled){");
+  if (legacyStart >= 0) {
+    const legacyEnd = text.indexOf(homeExpr, legacyStart);
+    if (legacyEnd > legacyStart) {
+      console.log("   [avatar] upgraded Rebuild avatar auto-open");
+      return `${text.slice(0, legacyStart)}${getRebuildAvatarAutoOpenRuntimeSnippet()}${text.slice(legacyEnd)}`;
+    }
+  }
+  if (text.includes("__codexRebuildAvatarAutoOpenVersion")) return text;
+  if (!text.includes(homeExpr)) {
+    console.log("   [!] bootstrap avatar auto-open insertion point not found");
+    return text;
+  }
+  console.log("   [avatar] patched Rebuild avatar auto-open");
+  return text.replace(homeExpr, `${getRebuildAvatarAutoOpenRuntimeSnippet()}${homeExpr}`);
 }
 
 function getRebuildLifecycleTraceRuntimeSnippet() {
@@ -895,6 +931,7 @@ function main() {
   const args = process.argv.slice(2);
   const platIdx = args.indexOf("--platform");
   const platform = platIdx !== -1 ? args[platIdx + 1] : null;
+  const patchOnly = args.includes("--patch-only");
 
   if (!platform || !["mac-arm64", "mac-x64", "win"].includes(platform)) {
     console.error("[x] Usage: build-from-upstream.js --platform <mac-arm64|mac-x64|win>");
@@ -903,6 +940,19 @@ function main() {
 
   console.log(`\n== Build from upstream: ${platform} ==\n`);
   fs.mkdirSync(OUT_DIR, { recursive: true });
+  if (patchOnly) {
+    const asarDir = path.join(SRC_DIR, platform, "_asar");
+    if (!fs.existsSync(asarDir)) {
+      console.error(`[x] ${platform}/_asar/ not found. Run sync-upstream first.`);
+      process.exit(1);
+    }
+    patchRebuildAsarMetadata(asarDir);
+    patchRebuildBootstrap(asarDir);
+    patchRebuildWindowsImmediateExit(asarDir);
+    patchRebuildChildProcessGoneFatal(asarDir);
+    patchRebuildBundledMarketplaceRoot(asarDir);
+    return;
+  }
 
   if (platform.startsWith("mac")) {
     buildMac(platform);
