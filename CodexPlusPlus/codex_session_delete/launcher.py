@@ -1037,7 +1037,7 @@ def _avatar_cursor_repulsion(center_x: float, center_y: float, cursor: tuple[flo
     dx = center_x - cursor[0]
     dy = center_y - cursor[1]
     distance = math.hypot(dx, dy)
-    radius = 160.0
+    radius = 240.0
     if distance <= 0.001 or distance >= radius:
         return (0.0, 0.0)
     unit_x = dx / distance

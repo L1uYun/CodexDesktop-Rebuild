@@ -54,6 +54,13 @@ def test_avatar_cursor_repulsion_pushes_away_from_near_cursor():
     assert abs(repel_y) < 0.001
 
 
+def test_avatar_cursor_repulsion_reaches_past_old_radius():
+    repel_x, repel_y = launcher._avatar_cursor_repulsion(100, 100, (-100, 100))
+
+    assert repel_x > 0
+    assert abs(repel_y) < 0.001
+
+
 def test_avatar_cursor_repulsion_ignores_far_cursor():
     assert launcher._avatar_cursor_repulsion(100, 100, (400, 100)) == (0.0, 0.0)
 
