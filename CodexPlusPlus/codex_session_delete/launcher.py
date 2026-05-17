@@ -855,7 +855,7 @@ def ensure_avatar_overlay(debug_port: int) -> None:
         _log_runtime_event(f"avatar overlay ensure failed debug_port={debug_port}: {exc}")
 
 
-def start_avatar_random_walk(debug_port: int, interval: float = 0.08) -> threading.Thread | None:
+def start_avatar_random_walk(debug_port: int, interval: float = 0.045) -> threading.Thread | None:
     if sys.platform != "win32":
         return None
 
@@ -906,15 +906,15 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     max_y = max(min_y, work[3] - height)
     now = time.monotonic()
     last_t = state.get("last_t", now - 0.08)
-    dt = max(0.04, min(0.22, now - last_t))
+    dt = max(0.025, min(0.12, now - last_t))
     state["last_t"] = now
     if "x" not in state or abs(state.get("x", left) - left) > 120 or abs(state.get("y", top) - top) > 120:
         state["x"] = left
         state["y"] = top
         state["heading"] = random.uniform(0.0, 6.283185307179586)
-        state["speed"] = random.uniform(42.0, 68.0)
-    state["heading"] = state.get("heading", 0.0) + random.uniform(-1.25, 1.25) * dt
-    state["speed"] += (random.uniform(42.0, 72.0) - state.get("speed", 56.0)) * min(1.0, dt * 0.7)
+        state["speed"] = random.uniform(16.0, 28.0)
+    state["heading"] = state.get("heading", 0.0) + random.uniform(-0.42, 0.42) * dt
+    state["speed"] += (random.uniform(16.0, 30.0) - state.get("speed", 22.0)) * min(1.0, dt * 0.35)
     vx = math.cos(state["heading"]) * state["speed"]
     vy = math.sin(state["heading"]) * state["speed"] * 0.72
     steer_x = 0.0
@@ -934,12 +934,13 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         primary_y = min(max(primary_work[1], state["y"]), max(primary_work[1], primary_work[3] - height))
         steer_x += max(-3.0, min(3.0, (primary_x - state["x"]) / 260.0))
         steer_y += max(-2.0, min(2.0, (primary_y - state["y"]) / 260.0))
-    vx += steer_x * 95.0
-    vy += steer_y * 75.0
+    vx += steer_x * 38.0
+    vy += steer_y * 30.0
     if abs(steer_x) > 0.4 or abs(steer_y) > 0.4:
         state["heading"] = math.atan2(vy / 0.72, vx)
     state["x"] += vx * dt
     state["y"] += vy * dt
+    state["direction"] = -1.0 if vx < -2.0 else 1.0 if vx > 2.0 else state.get("direction", 1.0)
     hit_x = state["x"] < min_x or state["x"] > max_x
     hit_y = state["y"] < min_y or state["y"] > max_y
     state["x"] = max(min_x, min(max_x, state["x"]))
@@ -953,6 +954,7 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     if abs(next_x - left) < 1 and abs(next_y - top) < 1:
         return True
     _move_avatar_window(websocket_url, next_x, next_y)
+    _set_avatar_walk_direction(websocket_url, int(state.get("direction", 1.0)))
     return True
 
 
@@ -970,6 +972,10 @@ def _avatar_window_bounds(websocket_url: str) -> dict[str, int]:
 
 def _move_avatar_window(websocket_url: str, left: int, top: int) -> None:
     evaluate_script(websocket_url, f"window.moveTo({int(left)}, {int(top)});")
+
+
+def _set_avatar_walk_direction(websocket_url: str, direction: int) -> None:
+    evaluate_script(websocket_url, f"window.__codexAvatarWalkDirection = {1 if direction >= 0 else -1};")
 
 
 def _browser_websocket_url(debug_port: int) -> str:

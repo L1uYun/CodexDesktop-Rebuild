@@ -86,7 +86,7 @@
       if (!document.documentElement.contains(target)) return;
       if (body) {
         const frameIndex = Math.floor(now / 95) % 8;
-        const crawlRow = "87.5%";
+        const crawlRow = window.__codexAvatarWalkDirection < 0 ? "25%" : "87.5%";
         body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${crawlRow}`;
         const bodyLift = Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -1 : 0;
         body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;

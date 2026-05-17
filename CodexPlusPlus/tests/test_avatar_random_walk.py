@@ -36,13 +36,16 @@ def test_avatar_random_walk_moves_avatar_target_inside_primary_work_area(monkeyp
     monkeypatch.setattr(launcher.random, "uniform", lambda start, end: 0.0 if start < 0 else 50.0)
     monkeypatch.setattr(launcher, "_avatar_window_bounds", lambda websocket_url: {"left": 100, "top": 100, "width": 356, "height": 320})
     monkeypatch.setattr(launcher, "_move_avatar_window", lambda websocket_url, left, top: calls.append((websocket_url, left, top)))
+    monkeypatch.setattr(launcher, "_set_avatar_walk_direction", lambda websocket_url, direction: calls.append(("direction", websocket_url, direction)))
 
     state = {}
     assert launcher.move_avatar_window_once(19339, state) is True
     assert launcher.move_avatar_window_once(19339, state) is True
-    assert calls[-1][0] == "ws://avatar"
-    assert 100 < calls[-1][1] < 180
-    assert 0 <= calls[-1][2] <= 720
+    move_calls = [call for call in calls if call[0] == "ws://avatar"]
+    direction_calls = [call for call in calls if call[0] == "direction"]
+    assert 100 < move_calls[-1][1] < 180
+    assert 0 <= move_calls[-1][2] <= 720
+    assert direction_calls[-1] == ("direction", "ws://avatar", 1)
 
 
 def test_avatar_random_walk_targets_primary_when_dragged_to_secondary(monkeypatch):
@@ -65,9 +68,12 @@ def test_avatar_random_walk_targets_primary_when_dragged_to_secondary(monkeypatc
     monkeypatch.setattr(launcher.random, "uniform", lambda start, end: 0.0 if start < 0 else 50.0)
     monkeypatch.setattr(launcher, "_avatar_window_bounds", lambda websocket_url: {"left": 2200, "top": 100, "width": 356, "height": 320})
     monkeypatch.setattr(launcher, "_move_avatar_window", lambda websocket_url, left, top: calls.append((websocket_url, left, top)))
+    monkeypatch.setattr(launcher, "_set_avatar_walk_direction", lambda websocket_url, direction: calls.append(("direction", websocket_url, direction)))
 
     state = {}
     assert launcher.move_avatar_window_once(19339, state) is True
     assert launcher.move_avatar_window_once(19339, state) is True
-    assert calls[-1][0] == "ws://avatar"
-    assert calls[-1][1] < 2200
+    move_calls = [call for call in calls if call[0] == "ws://avatar"]
+    direction_calls = [call for call in calls if call[0] == "direction"]
+    assert move_calls[-1][1] < 2200
+    assert direction_calls[-1] == ("direction", "ws://avatar", -1)
