@@ -19,6 +19,20 @@ def test_avatar_random_walk_returns_false_without_avatar_websocket(monkeypatch):
     assert launcher.move_avatar_window_once(19339, {}) is False
 
 
+def test_avatar_direction_uses_velocity_angle():
+    assert launcher._avatar_direction_degrees(5, 0, 90) == 0
+    assert launcher._avatar_direction_degrees(0, 5, 0) == 90
+    assert launcher._avatar_direction_degrees(-5, 0, 0) == 180
+    assert launcher._avatar_direction_degrees(0, -5, 0) == -90
+    assert launcher._avatar_direction_degrees(1, 1, 45) == 45
+
+
+def test_avatar_direction_sector_has_hysteresis():
+    assert launcher._avatar_direction_sector(-115, 5) == 5
+    assert launcher._avatar_direction_sector(-98, 5) == 6
+    assert launcher._avatar_direction_sector(4, 0) == 0
+
+
 def test_avatar_random_walk_moves_avatar_target_inside_primary_work_area(monkeypatch):
     calls = []
     times = iter([10.0, 10.12])
@@ -45,7 +59,7 @@ def test_avatar_random_walk_moves_avatar_target_inside_primary_work_area(monkeyp
     direction_calls = [call for call in calls if call[0] == "direction"]
     assert 100 < move_calls[-1][1] < 180
     assert 0 <= move_calls[-1][2] <= 720
-    assert direction_calls[-1] == ("direction", "ws://avatar", 1)
+    assert direction_calls[-1][2] == 0
 
 
 def test_avatar_random_walk_targets_primary_when_dragged_to_secondary(monkeypatch):
@@ -76,4 +90,4 @@ def test_avatar_random_walk_targets_primary_when_dragged_to_secondary(monkeypatc
     move_calls = [call for call in calls if call[0] == "ws://avatar"]
     direction_calls = [call for call in calls if call[0] == "direction"]
     assert move_calls[-1][1] < 2200
-    assert direction_calls[-1] == ("direction", "ws://avatar", -1)
+    assert direction_calls[-1][2] == 4

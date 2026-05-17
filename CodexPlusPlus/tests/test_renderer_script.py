@@ -663,7 +663,7 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "function installAvatarBionicMotion" in text
     assert 'document.querySelector(".codex-avatar-button")' in text
     assert "dataset.codexAvatarBionicMotion" in text
-    assert 'const motionVersion = "2"' in text
+    assert 'const motionVersion = "4"' in text
     assert "__codexAvatarBionicMotionRetryTimer" in text
     assert "setTimeout(installAvatarBionicMotion, 250)" in text
     assert "requestAnimationFrame(step)" in text
@@ -673,6 +673,11 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "crawlRow" in text
     assert "87.5%" in text
     assert "25%" in text
+    assert "12.5%" in text
+    assert "37.5%" in text
+    assert "100%" in text
+    assert "Number.isInteger(window.__codexAvatarWalkDirection)" in text
+    assert "directionRows" in text
     assert "__codexAvatarWalkDirection" in text
     assert "rotate(${rotate" not in text
     assert 'target.style.transform = "translate3d(0, 0, 0)"' in text

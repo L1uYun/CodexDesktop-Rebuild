@@ -36,6 +36,9 @@ from codex_session_delete.storage_adapter import SQLiteStorageAdapter
 from codex_session_delete.user_scripts import UserScriptManager
 
 
+_AVATAR_WALK_OWNER_SOCKET: socket.socket | None = None
+
+
 class ApiFirstDeleteService:
     def __init__(self, api_adapter: ApiAdapter, db_path: Path | None, backup_dir: Path):
         self.api_adapter = api_adapter
@@ -858,6 +861,16 @@ def ensure_avatar_overlay(debug_port: int) -> None:
 def start_avatar_random_walk(debug_port: int, interval: float = 0.045) -> threading.Thread | None:
     if sys.platform != "win32":
         return None
+    global _AVATAR_WALK_OWNER_SOCKET
+    owner_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        owner_socket.bind(("127.0.0.1", debug_port + 101))
+        owner_socket.listen(1)
+    except OSError:
+        owner_socket.close()
+        _log_runtime_event(f"avatar random walk owner already active debug_port={debug_port}")
+        return None
+    _AVATAR_WALK_OWNER_SOCKET = owner_socket
 
     def watch() -> None:
         state: dict[str, float] = {}
@@ -908,7 +921,7 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     last_t = state.get("last_t", now - 0.08)
     dt = max(0.025, min(0.12, now - last_t))
     state["last_t"] = now
-    if "x" not in state or abs(state.get("x", left) - left) > 120 or abs(state.get("y", top) - top) > 120:
+    if "x" not in state or abs(state.get("x", left) - left) > 24 or abs(state.get("y", top) - top) > 24:
         state["x"] = left
         state["y"] = top
         state["heading"] = random.uniform(0.0, 6.283185307179586)
@@ -940,7 +953,8 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         state["heading"] = math.atan2(vy / 0.72, vx)
     state["x"] += vx * dt
     state["y"] += vy * dt
-    state["direction"] = -1.0 if vx < -2.0 else 1.0 if vx > 2.0 else state.get("direction", 1.0)
+    state["direction_degrees"] = _avatar_direction_degrees(vx, vy, state.get("direction_degrees", 0.0))
+    state["direction_sector"] = _avatar_direction_sector(state["direction_degrees"], state.get("direction_sector", 0.0))
     hit_x = state["x"] < min_x or state["x"] > max_x
     hit_y = state["y"] < min_y or state["y"] > max_y
     state["x"] = max(min_x, min(max_x, state["x"]))
@@ -954,8 +968,24 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     if abs(next_x - left) < 1 and abs(next_y - top) < 1:
         return True
     _move_avatar_window(websocket_url, next_x, next_y)
-    _set_avatar_walk_direction(websocket_url, int(state.get("direction", 1.0)))
+    _set_avatar_walk_direction(websocket_url, int(state.get("direction_sector", 0.0)))
     return True
+
+
+def _avatar_direction_degrees(vx: float, vy: float, previous: float) -> float:
+    if max(abs(vx), abs(vy)) < 2.0:
+        return previous
+    return math.degrees(math.atan2(vy, vx))
+
+
+def _avatar_direction_sector(degrees: float, previous: float) -> int:
+    sector = int(round(degrees / 45.0)) % 8
+    previous_sector = int(previous) % 8
+    previous_center = previous_sector * 45.0
+    delta = ((degrees - previous_center + 180.0) % 360.0) - 180.0
+    if abs(delta) < 32.0:
+        return previous_sector
+    return sector
 
 
 def _avatar_window_bounds(websocket_url: str) -> dict[str, int]:
@@ -974,8 +1004,8 @@ def _move_avatar_window(websocket_url: str, left: int, top: int) -> None:
     evaluate_script(websocket_url, f"window.moveTo({int(left)}, {int(top)});")
 
 
-def _set_avatar_walk_direction(websocket_url: str, direction: int) -> None:
-    evaluate_script(websocket_url, f"window.__codexAvatarWalkDirection = {1 if direction >= 0 else -1};")
+def _set_avatar_walk_direction(websocket_url: str, direction_sector: int) -> None:
+    evaluate_script(websocket_url, f"window.__codexAvatarWalkDirection = {int(direction_sector) % 8};")
 
 
 def _browser_websocket_url(debug_port: int) -> str:

@@ -96,6 +96,11 @@ def crawl_frame(base: Image.Image, step: int) -> Image.Image:
     return out
 
 
+def directional_crawl_frame(base: Image.Image, step: int, degrees: int) -> Image.Image:
+    frame = crawl_frame(base, step)
+    return frame.rotate(-degrees, expand=False, resample=Image.Resampling.NEAREST)
+
+
 def idle_frame(base: Image.Image, step: int) -> Image.Image:
     offset = [0, 0, 1, 0, 0, -1, 0, 0][step % 8]
     out = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -108,21 +113,19 @@ def main() -> None:
     base = centered_base()
     sheet = Image.new("RGBA", (8 * CELL_W, 9 * CELL_H), (0, 0, 0, 0))
     rows = [
-        ("idle", False, idle_frame),
-        ("waving", False, crawl_frame),
-        ("running-left", True, crawl_frame),
-        ("jumping", False, crawl_frame),
-        ("failed", False, idle_frame),
-        ("review", False, crawl_frame),
-        ("running", False, crawl_frame),
-        ("running-right", False, crawl_frame),
-        ("sleeping", False, idle_frame),
+        ("idle", lambda step: idle_frame(base, step)),
+        ("east", lambda step: directional_crawl_frame(base, step, 0)),
+        ("southeast", lambda step: directional_crawl_frame(base, step, 45)),
+        ("south", lambda step: directional_crawl_frame(base, step, 90)),
+        ("southwest", lambda step: directional_crawl_frame(base, step, 135)),
+        ("west", lambda step: directional_crawl_frame(base, step, 180)),
+        ("northwest", lambda step: directional_crawl_frame(base, step, 225)),
+        ("north", lambda step: directional_crawl_frame(base, step, 270)),
+        ("northeast", lambda step: directional_crawl_frame(base, step, 315)),
     ]
-    for row, (_name, mirror, factory) in enumerate(rows):
+    for row, (_name, factory) in enumerate(rows):
         for column in range(8):
-            frame = factory(base, column)
-            if mirror:
-                frame = frame.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            frame = factory(column)
             sheet.alpha_composite(frame, (column * CELL_W, row * CELL_H))
     sheet.save(OUTPUT / "spritesheet.png")
     sheet.crop((0, 0, 6 * CELL_W, CELL_H)).save(OUTPUT / "idle-preview-strip.png")

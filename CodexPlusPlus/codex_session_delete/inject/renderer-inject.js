@@ -66,7 +66,7 @@
     if (!isAvatarOverlayPage()) return;
     const target = document.querySelector(".codex-avatar-button");
     const body = target?.querySelector?.(".codex-avatar-root");
-    const motionVersion = "2";
+    const motionVersion = "4";
     if (!target) {
       clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
       window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);
@@ -88,7 +88,9 @@
       if (!document.documentElement.contains(target)) return;
       if (body) {
         const frameIndex = Math.floor(now / 95) % 8;
-        const crawlRow = window.__codexAvatarWalkDirection < 0 ? "25%" : "87.5%";
+        const sector = Number.isInteger(window.__codexAvatarWalkDirection) ? window.__codexAvatarWalkDirection : 0;
+        const directionRows = ["12.5%", "25%", "37.5%", "50%", "62.5%", "75%", "87.5%", "100%"];
+        const crawlRow = directionRows[((sector % 8) + 8) % 8];
         body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${crawlRow}`;
         const bodyLift = Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -1 : 0;
         body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;
