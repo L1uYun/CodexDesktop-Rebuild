@@ -66,13 +66,15 @@
     if (!isAvatarOverlayPage()) return;
     const target = document.querySelector(".codex-avatar-button");
     const body = target?.querySelector?.(".codex-avatar-root");
+    const motionVersion = "2";
     if (!target) {
       clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
       window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);
       return;
     }
-    if (target.dataset.codexAvatarBionicMotion === "1") return;
-    target.dataset.codexAvatarBionicMotion = "1";
+    if (target.dataset.codexAvatarBionicMotion === motionVersion) return;
+    cancelAnimationFrame(window.__codexAvatarBionicMotionFrame);
+    target.dataset.codexAvatarBionicMotion = motionVersion;
     target.style.transformOrigin = "50% 72%";
     target.style.willChange = "auto";
     target.style.transition = "none";
