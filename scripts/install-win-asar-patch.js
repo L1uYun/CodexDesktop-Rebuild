@@ -31,6 +31,30 @@ function patchExternalBrowserClients(installDir) {
   }
 }
 
+function copyRecursive(source, target) {
+  const stat = fs.statSync(source);
+  if (stat.isDirectory()) {
+    fs.mkdirSync(target, { recursive: true });
+    for (const entry of fs.readdirSync(source)) {
+      copyRecursive(path.join(source, entry), path.join(target, entry));
+    }
+    return;
+  }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(source, target);
+}
+
+function copyCodexPlusPlus(installDir) {
+  const sourcePackage = path.join(PROJECT_ROOT, "CodexPlusPlus", "codex_session_delete");
+  const targetRoot = path.join(installDir, "resources", "CodexPlusPlus");
+  const targetPackage = path.join(targetRoot, "codex_session_delete");
+  if (!fs.existsSync(sourcePackage)) throw new Error(`Missing CodexPlusPlus source package: ${sourcePackage}`);
+  if (fs.existsSync(targetRoot)) fs.rmSync(targetRoot, { recursive: true, force: true });
+  fs.mkdirSync(targetRoot, { recursive: true });
+  copyRecursive(sourcePackage, targetPackage);
+  console.log("[plusplus] installed CodexPlusPlus Python package");
+}
+
 function computeAsarHeaderHash(asarPath) {
   const crypto = require("crypto");
   const buf = fs.readFileSync(asarPath);
@@ -79,6 +103,7 @@ function main() {
   runPatchScript("patch-rebuild-windows-thread-path-preflight.js");
   runPatchScript("build-from-upstream.js", ["--platform", "win", "--patch-only"]);
   patchExternalBrowserClients(installDir);
+  copyCodexPlusPlus(installDir);
 
   const oldHash = computeAsarHeaderHash(asarPath);
   console.log(`[old] ${oldHash}`);
