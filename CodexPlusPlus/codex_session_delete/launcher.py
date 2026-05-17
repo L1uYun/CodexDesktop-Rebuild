@@ -934,6 +934,8 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     vy = math.sin(state["heading"]) * state["speed"] * 0.72
     steer_x = 0.0
     steer_y = 0.0
+    cursor_push_x = 0.0
+    cursor_push_y = 0.0
     margin = 120.0
     if state["x"] < min_x + margin:
         steer_x += (min_x + margin - state["x"]) / margin
@@ -951,12 +953,12 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         steer_y += max(-2.0, min(2.0, (primary_y - state["y"]) / 260.0))
     cursor = _cursor_position()
     if cursor is not None:
-        repel_x, repel_y = _avatar_cursor_repulsion(state["x"] + width / 2, state["y"] + height / 2, cursor)
-        steer_x += repel_x
-        steer_y += repel_y
+        cursor_push_x, cursor_push_y = _avatar_cursor_repulsion(state["x"] + width / 2, state["y"] + height / 2, cursor)
     vx += steer_x * 38.0
     vy += steer_y * 30.0
-    if abs(steer_x) > 0.4 or abs(steer_y) > 0.4:
+    vx += cursor_push_x * 42.0
+    vy += cursor_push_y * 42.0
+    if abs(steer_x) > 0.4 or abs(steer_y) > 0.4 or abs(cursor_push_x) > 0.4 or abs(cursor_push_y) > 0.4:
         state["heading"] = math.atan2(vy / 0.72, vx)
     state["x"] += vx * dt
     state["y"] += vy * dt
@@ -1047,7 +1049,7 @@ def _avatar_cursor_repulsion(center_x: float, center_y: float, cursor: tuple[flo
     strength = ((radius - distance) / radius) ** 2
     if distance < 70.0:
         strength += (70.0 - distance) / 70.0
-    return (unit_x * strength * 2.4, unit_y * strength * 2.0)
+    return (unit_x * strength * 2.4, unit_y * strength * 2.4)
 
 
 def _browser_websocket_url(debug_port: int) -> str:

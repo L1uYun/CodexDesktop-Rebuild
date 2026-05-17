@@ -61,6 +61,15 @@ def test_avatar_cursor_repulsion_reaches_past_old_radius():
     assert abs(repel_y) < 0.001
 
 
+def test_avatar_cursor_repulsion_is_not_directionally_weaker():
+    horizontal_x, horizontal_y = launcher._avatar_cursor_repulsion(100, 100, (60, 100))
+    vertical_x, vertical_y = launcher._avatar_cursor_repulsion(100, 100, (100, 60))
+
+    assert abs(horizontal_x) == abs(vertical_y)
+    assert abs(horizontal_y) < 0.001
+    assert abs(vertical_x) < 0.001
+
+
 def test_avatar_cursor_repulsion_ignores_far_cursor():
     assert launcher._avatar_cursor_repulsion(100, 100, (400, 100)) == (0.0, 0.0)
 
