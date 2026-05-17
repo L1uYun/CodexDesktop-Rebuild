@@ -908,6 +908,8 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     height = int(bounds.get("height") or 320)
     left = float(bounds.get("left") or 0)
     top = float(bounds.get("top") or 0)
+    avatar_center_x = float(bounds.get("avatar_center_x") or (left + width / 2))
+    avatar_center_y = float(bounds.get("avatar_center_y") or (top + height / 2))
     monitors = _windows_monitors()
     if not monitors:
         return False
@@ -915,6 +917,14 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
     current_monitor = next((monitor for monitor in monitors if _point_in_rect(center, monitor["rect"])), monitors[0])
     primary_monitor = next((monitor for monitor in monitors if monitor["primary"]), monitors[0])
     work = current_monitor["work"]
+    if not current_monitor["primary"]:
+        primary_work = primary_monitor["work"]
+        work = (
+            min(work[0], primary_work[0]),
+            min(work[1], primary_work[1]),
+            max(work[2], primary_work[2]),
+            max(work[3], primary_work[3]),
+        )
     min_x = work[0]
     min_y = work[1]
     max_x = max(min_x, work[2] - width)
@@ -949,11 +959,15 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         primary_work = primary_monitor["work"]
         primary_x = min(max(primary_work[0], state["x"]), max(primary_work[0], primary_work[2] - width))
         primary_y = min(max(primary_work[1], state["y"]), max(primary_work[1], primary_work[3] - height))
-        steer_x += max(-3.0, min(3.0, (primary_x - state["x"]) / 260.0))
+        steer_x += max(-6.0, min(6.0, (primary_x - state["x"]) / 140.0))
         steer_y += max(-2.0, min(2.0, (primary_y - state["y"]) / 260.0))
     cursor = _cursor_position()
     if cursor is not None:
-        cursor_push_x, cursor_push_y = _avatar_cursor_repulsion(state["x"] + width / 2, state["y"] + height / 2, cursor)
+        cursor_push_x, cursor_push_y = _avatar_cursor_repulsion(
+            state["x"] + (avatar_center_x - left),
+            state["y"] + (avatar_center_y - top),
+            cursor,
+        )
     vx += steer_x * 38.0
     vy += steer_y * 30.0
     vx += cursor_push_x * 42.0
@@ -1000,13 +1014,21 @@ def _avatar_direction_sector(degrees: float, previous: float) -> int:
 def _avatar_window_bounds(websocket_url: str) -> dict[str, int]:
     result = evaluate_script(
         websocket_url,
-        "JSON.stringify({left:window.screenX,top:window.screenY,width:window.outerWidth,height:window.outerHeight})",
+        (
+            "JSON.stringify((()=>{"
+            "const e=document.querySelector('.codex-avatar-root')||document.querySelector('.codex-avatar-button');"
+            "const r=e&&e.getBoundingClientRect();"
+            "return {left:window.screenX,top:window.screenY,width:window.outerWidth,height:window.outerHeight,"
+            "avatar_center_x:r?window.screenX+r.left+r.width/2:window.screenX+window.outerWidth/2,"
+            "avatar_center_y:r?window.screenY+r.top+r.height/2:window.screenY+window.outerHeight/2};"
+            "})())"
+        ),
     )
     value = (((result.get("result") or {}).get("result") or {}).get("value")) if isinstance(result, dict) else None
     if not isinstance(value, str):
         raise RuntimeError("avatar window bounds unavailable")
     data = json.loads(value)
-    return {key: int(data[key]) for key in ("left", "top", "width", "height")}
+    return {key: int(data[key]) for key in ("left", "top", "width", "height", "avatar_center_x", "avatar_center_y")}
 
 
 def _move_avatar_window(websocket_url: str, left: int, top: int) -> None:
