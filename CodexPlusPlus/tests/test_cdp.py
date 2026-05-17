@@ -5,7 +5,7 @@ from pathlib import Path
 import codex_session_delete.cdp as cdp
 import websocket
 
-from codex_session_delete.cdp import BRIDGE_BINDING_NAME, _bridge_loop, add_script_to_new_documents, build_bridge_script, codex_page_targets, evaluate_user_scripts, install_bridge, list_targets, open_devtools, pick_page_target
+from codex_session_delete.cdp import BRIDGE_BINDING_NAME, _bridge_loop, add_script_to_new_documents, build_bridge_script, codex_page_targets, ensure_avatar_overlay_target, evaluate_user_scripts, install_bridge, list_targets, open_devtools, pick_page_target
 
 
 class TimeoutThenMessageSocket:
@@ -112,6 +112,44 @@ def test_list_targets_bypasses_proxy_environment(monkeypatch):
     assert seen == {
         "trust_env": False,
         "url": "http://127.0.0.1:9229/json",
+        "timeout": 3,
+    }
+
+
+def test_ensure_avatar_overlay_reuses_existing_target(monkeypatch):
+    target = {"type": "page", "url": "app://-/index.html?initialRoute=%2Favatar-overlay"}
+    monkeypatch.setattr(cdp, "list_targets", lambda port: [target])
+
+    assert ensure_avatar_overlay_target(9229) is target
+
+
+def test_ensure_avatar_overlay_opens_target_through_cdp_without_proxy(monkeypatch):
+    seen = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"id": "avatar"}
+
+    class FakeSession:
+        def __init__(self):
+            self.trust_env = True
+
+        def put(self, url, timeout):
+            seen["trust_env"] = self.trust_env
+            seen["url"] = url
+            seen["timeout"] = timeout
+            return FakeResponse()
+
+    monkeypatch.setattr(cdp, "list_targets", lambda port: [])
+    monkeypatch.setattr("codex_session_delete.cdp.requests.Session", FakeSession)
+
+    assert ensure_avatar_overlay_target(9229) == {"id": "avatar"}
+    assert seen == {
+        "trust_env": False,
+        "url": "http://127.0.0.1:9229/json/new?app%3A%2F%2F-%2Findex.html%3FinitialRoute%3D%252Favatar-overlay",
         "timeout": 3,
     }
 

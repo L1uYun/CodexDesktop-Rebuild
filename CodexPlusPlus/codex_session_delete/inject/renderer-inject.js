@@ -65,6 +65,7 @@
   function installAvatarBionicMotion() {
     if (!isAvatarOverlayPage()) return;
     const target = document.querySelector(".codex-avatar-button");
+    const body = target?.querySelector?.(".codex-avatar-root");
     if (!target) {
       clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
       window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);
@@ -75,6 +76,10 @@
     target.style.transformOrigin = "50% 72%";
     target.style.willChange = "transform";
     target.style.transition = "filter 180ms ease";
+    if (body) {
+      body.style.transformOrigin = "50% 78%";
+      body.style.willChange = "transform";
+    }
 
     const state = {
       x: 0,
@@ -84,6 +89,9 @@
       goalX: 0,
       goalY: 0,
       nextGoalAt: 0,
+      strideStart: 0,
+      strideDuration: 1300,
+      heading: Math.random() > 0.5 ? 1 : -1,
       pointerX: -10000,
       pointerY: -10000,
     };
@@ -94,9 +102,27 @@
     window.addEventListener("pointermove", window.__codexAvatarBionicPointerHandler, { passive: true });
 
     function pickGoal(now) {
-      state.goalX = (Math.random() - 0.5) * 28;
-      state.goalY = (Math.random() - 0.5) * 18;
-      state.nextGoalAt = now + 2200 + Math.random() * 2600;
+      if (Math.random() < 0.18) state.heading *= -1;
+      const stride = 14 + Math.random() * 18;
+      state.goalX += stride * state.heading;
+      state.goalY += (Math.random() - 0.5) * 8;
+      state.strideStart = now;
+      state.strideDuration = 1150 + Math.random() * 900;
+      state.nextGoalAt = now + state.strideDuration;
+    }
+
+    function clampAvatarOffset(x, y, rect) {
+      const margin = 4;
+      const baseLeft = rect.left - state.x;
+      const baseTop = rect.top - state.y;
+      const minX = margin - baseLeft;
+      const minY = margin - baseTop;
+      const maxX = window.innerWidth - margin - rect.width - baseLeft;
+      const maxY = window.innerHeight - margin - rect.height - baseTop;
+      return {
+        x: Math.max(minX, Math.min(maxX, x)),
+        y: Math.max(minY, Math.min(maxY, y)),
+      };
     }
 
     function step(now) {
@@ -116,17 +142,30 @@
           repelY = (dy / distance) * force * 22;
         }
       }
-      const breath = Math.sin(now / 620);
-      const twitch = Math.sin(now / 137) * 0.7 + Math.sin(now / 211) * 0.45;
-      const desiredX = state.goalX + repelX + twitch;
-      const desiredY = state.goalY + repelY + breath * 4;
-      state.vx = (state.vx + (desiredX - state.x) * 0.025) * 0.88;
-      state.vy = (state.vy + (desiredY - state.y) * 0.025) * 0.88;
+      const stridePhase = Math.min(1, Math.max(0, (now - state.strideStart) / state.strideDuration));
+      const legBeat = Math.sin(stridePhase * Math.PI * 2);
+      const alternatingFeet = Math.sin(stridePhase * Math.PI * 4);
+      const bodyLift = Math.max(0, Math.sin(stridePhase * Math.PI)) * -1.8;
+      const lateralSway = legBeat * 1.6;
+      const microPause = stridePhase > 0.72 ? 0.55 : 1;
+      const boundedGoal = clampAvatarOffset(state.goalX + repelX, state.goalY + repelY + bodyLift, rect);
+      const desiredX = boundedGoal.x;
+      const desiredY = boundedGoal.y;
+      state.vx = (state.vx + (desiredX - state.x) * 0.012 * microPause) * 0.82;
+      state.vy = (state.vy + (desiredY - state.y) * 0.01 * microPause) * 0.84;
       state.x += state.vx;
       state.y += state.vy;
-      const rotate = Math.max(-4, Math.min(4, state.vx * 1.4 + twitch * 0.35));
-      const scale = 1 + breath * 0.018;
-      target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg) scale(${scale.toFixed(3)})`;
+      const boundedOffset = clampAvatarOffset(state.x, state.y, rect);
+      state.x = boundedOffset.x;
+      state.y = boundedOffset.y;
+      if (Math.abs(boundedOffset.x - desiredX) > 1) state.heading *= -1;
+      const rotate = Math.max(-5, Math.min(5, state.vx * 1.1 + lateralSway * 0.7));
+      const scaleX = 1 + Math.abs(alternatingFeet) * 0.014;
+      const scaleY = 1 - Math.abs(alternatingFeet) * 0.018;
+      target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg)`;
+      if (body) {
+        body.style.transform = `translate3d(0, ${(bodyLift + Math.abs(alternatingFeet) * 1.4).toFixed(2)}px, 0) scale(${scaleX.toFixed(3)}, ${scaleY.toFixed(3)})`;
+      }
       window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);
     }
 

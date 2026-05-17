@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 from typing import Callable
+from urllib.parse import quote
 
 import requests
 import websocket
@@ -57,6 +58,22 @@ def list_targets(port: int) -> list[dict[str, object]]:
     response = session.get(f"http://127.0.0.1:{port}/json", timeout=3)
     response.raise_for_status()
     return response.json()
+
+
+def open_avatar_overlay_target(port: int) -> dict[str, object]:
+    session = requests.Session()
+    session.trust_env = False
+    url = "app://-/index.html?initialRoute=%2Favatar-overlay"
+    response = session.put(f"http://127.0.0.1:{port}/json/new?{quote(url, safe='')}", timeout=3)
+    response.raise_for_status()
+    return response.json()
+
+
+def ensure_avatar_overlay_target(port: int) -> dict[str, object] | None:
+    for target in list_targets(port):
+        if str(target.get("url", "")).endswith("initialRoute=%2Favatar-overlay"):
+            return target
+    return open_avatar_overlay_target(port)
 
 
 def codex_page_targets(targets: list[dict[str, object]]) -> list[dict[str, object]]:

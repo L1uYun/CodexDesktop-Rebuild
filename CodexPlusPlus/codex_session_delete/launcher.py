@@ -819,6 +819,7 @@ def inject_with_retry(
     last_error: Exception | None = None
     for _ in range(attempts):
         try:
+            ensure_avatar_overlay(debug_port)
             def on_injection(injection):
                 runtime.add_websocket_url(injection.websocket_url)
                 evaluate_user_scripts(injection.websocket_url, runtime.user_scripts.build_enabled_bundle())
@@ -841,6 +842,14 @@ def inject_with_retry(
     if last_error is not None:
         raise last_error
     raise RuntimeError("Codex injection failed")
+
+
+def ensure_avatar_overlay(debug_port: int) -> None:
+    try:
+        cdp.ensure_avatar_overlay_target(debug_port)
+        _log_runtime_event(f"avatar overlay ensured debug_port={debug_port}")
+    except Exception as exc:
+        _log_runtime_event(f"avatar overlay ensure failed debug_port={debug_port}: {exc}")
 
 
 def start_bridge_watchdog(

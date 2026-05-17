@@ -665,10 +665,16 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "dataset.codexAvatarBionicMotion" in text
     assert "__codexAvatarBionicMotionRetryTimer" in text
     assert "setTimeout(installAvatarBionicMotion, 250)" in text
+    assert "function clampAvatarOffset" in text
+    assert "window.innerWidth" in text
+    assert "window.innerHeight" in text
+    assert "boundedOffset" in text
     assert "requestAnimationFrame(step)" in text
     assert "pointermove" in text
     assert "repelX" in text
-    assert "breath" in text
+    assert "stridePhase" in text
+    assert "alternatingFeet" in text
+    assert ".codex-avatar-root" in text
     assert "translate3d" in text
     assert "installAvatarBionicMotion();" in text
 
