@@ -132,7 +132,7 @@
       if (body) {
         state.spriteRow ||= getComputedStyle(body).backgroundPosition.split(" ")[1] || "87.5%";
         const frameIndex = Math.floor(now / 115) % 8;
-        const crawlRow = state.heading < 0 ? "25%" : "87.5%";
+        const crawlRow = "87.5%";
         body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${crawlRow}`;
       }
       const pointer = window.__codexAvatarBionicPointer;
@@ -165,8 +165,7 @@
       state.x = boundedOffset.x;
       state.y = boundedOffset.y;
       if (Math.abs(boundedOffset.x - desiredX) > 1) state.heading *= -1;
-      const rotate = Math.max(-5, Math.min(5, state.vx * 1.1 + lateralSway * 0.7));
-      target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0) rotate(${rotate.toFixed(2)}deg)`;
+      target.style.transform = `translate3d(${state.x.toFixed(2)}px, ${state.y.toFixed(2)}px, 0)`;
       if (body) {
         body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;
       }

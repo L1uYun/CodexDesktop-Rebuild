@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 import json
 import os
+import random
 import socket
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
+import websocket
 
 from codex_session_delete import cdp
 from codex_session_delete.app_paths import resolve_codex_app_dir
@@ -852,6 +854,132 @@ def ensure_avatar_overlay(debug_port: int) -> None:
         _log_runtime_event(f"avatar overlay ensure failed debug_port={debug_port}: {exc}")
 
 
+def start_avatar_random_walk(debug_port: int, interval: float = 0.08) -> threading.Thread | None:
+    if sys.platform != "win32":
+        return None
+
+    def watch() -> None:
+        state = {"x": 0.0, "y": 0.0, "goal_x": 0.0, "goal_y": 0.0, "next_goal_at": 0.0}
+        while True:
+            try:
+                move_avatar_window_once(debug_port, state)
+            except Exception as exc:
+                _log_runtime_event(f"avatar random walk failed debug_port={debug_port}: {exc}")
+                time.sleep(2.0)
+            time.sleep(interval)
+
+    thread = threading.Thread(target=watch, daemon=True)
+    thread.start()
+    return thread
+
+
+def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
+    avatar_target = next(
+        (
+            target
+            for target in cdp.list_targets(debug_port)
+            if target.get("type") == "page" and "initialRoute=%2Favatar-overlay" in str(target.get("url", ""))
+        ),
+        None,
+    )
+    if not avatar_target:
+        return False
+    browser_ws = _browser_websocket_url(debug_port)
+    window = _cdp_call(browser_ws, "Browser.getWindowForTarget", {"targetId": avatar_target.get("id")})
+    window_id = int(window["windowId"])
+    bounds = dict(window.get("bounds") or {})
+    width = int(bounds.get("width") or 356)
+    height = int(bounds.get("height") or 320)
+    left = float(bounds.get("left") or 0)
+    top = float(bounds.get("top") or 0)
+    monitors = _windows_monitors()
+    if not monitors:
+        return False
+    center = (left + width / 2, top + height / 2)
+    current_monitor = next((monitor for monitor in monitors if _point_in_rect(center, monitor["rect"])), monitors[0])
+    primary_monitor = next((monitor for monitor in monitors if monitor["primary"]), monitors[0])
+    target_monitor = current_monitor if current_monitor["primary"] else primary_monitor
+    work = target_monitor["work"]
+    min_x = work[0]
+    min_y = work[1]
+    max_x = max(min_x, work[2] - width)
+    max_y = max(min_y, work[3] - height)
+    now = time.monotonic()
+    if now >= state.get("next_goal_at", 0) or not (min_x <= state.get("goal_x", left) <= max_x and min_y <= state.get("goal_y", top) <= max_y):
+        if current_monitor["primary"]:
+            state["goal_x"] = random.uniform(min_x, max_x)
+            state["goal_y"] = random.uniform(min_y, max_y)
+            state["next_goal_at"] = now + random.uniform(4.0, 9.0)
+        else:
+            state["goal_x"] = min(max(primary_monitor["work"][0], left), max(primary_monitor["work"][0], primary_monitor["work"][2] - width))
+            state["goal_y"] = min(max(primary_monitor["work"][1], top), max(primary_monitor["work"][1], primary_monitor["work"][3] - height))
+            state["next_goal_at"] = now + 1.0
+    state["x"] = left + (state["goal_x"] - left) * 0.018
+    state["y"] = top + (state["goal_y"] - top) * 0.018
+    next_x = round(max(min_x, min(max_x, state["x"])))
+    next_y = round(max(min_y, min(max_y, state["y"])))
+    if abs(next_x - left) < 1 and abs(next_y - top) < 1:
+        return True
+    _cdp_call(browser_ws, "Browser.setWindowBounds", {"windowId": window_id, "bounds": {"left": next_x, "top": next_y, "width": width, "height": height}})
+    return True
+
+
+def _browser_websocket_url(debug_port: int) -> str:
+    session = requests.Session()
+    session.trust_env = False
+    response = session.get(f"http://127.0.0.1:{debug_port}/json/version", timeout=3)
+    response.raise_for_status()
+    return str(response.json()["webSocketDebuggerUrl"])
+
+
+def _cdp_call(websocket_url: str, method: str, params: dict[str, object] | None = None) -> dict[str, object]:
+    ws = websocket.create_connection(websocket_url, timeout=3)
+    try:
+        ws.send(json.dumps({"id": 1, "method": method, "params": params or {}}))
+        while True:
+            message = json.loads(ws.recv())
+            if message.get("id") == 1:
+                if "error" in message:
+                    raise RuntimeError(str(message["error"]))
+                return dict(message.get("result") or {})
+    finally:
+        ws.close()
+
+
+def _windows_monitors() -> list[dict[str, object]]:
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    monitors: list[dict[str, object]] = []
+
+    class RECT(ctypes.Structure):
+        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+    class MONITORINFO(ctypes.Structure):
+        _fields_ = [("cbSize", ctypes.c_ulong), ("rcMonitor", RECT), ("rcWork", RECT), ("dwFlags", ctypes.c_ulong)]
+
+    callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(RECT), ctypes.c_long)
+
+    @callback_type
+    def callback(handle, _hdc, _rect, _data):
+        info = MONITORINFO()
+        info.cbSize = ctypes.sizeof(MONITORINFO)
+        if user32.GetMonitorInfoW(handle, ctypes.byref(info)):
+            monitors.append(
+                {
+                    "rect": (info.rcMonitor.left, info.rcMonitor.top, info.rcMonitor.right, info.rcMonitor.bottom),
+                    "work": (info.rcWork.left, info.rcWork.top, info.rcWork.right, info.rcWork.bottom),
+                    "primary": bool(info.dwFlags & 1),
+                }
+            )
+        return True
+
+    user32.EnumDisplayMonitors(None, None, callback, 0)
+    return monitors
+
+
+def _point_in_rect(point: tuple[float, float], rect: tuple[int, int, int, int]) -> bool:
+    return rect[0] <= point[0] < rect[2] and rect[1] <= point[1] < rect[3]
+
+
 def start_bridge_watchdog(
     debug_port: int,
     script_path: Path,
@@ -925,6 +1053,7 @@ def launch_and_inject(app_dir: Path | None, db_path: Path | None, backup_dir: Pa
             codex_proc = launch_codex_app(resolved_app_dir, debug_port)
         server.bridge_socket = inject_with_retry(debug_port, script_path, server.port, service, export_service, runtime)
         start_bridge_watchdog(debug_port, script_path, server.port, service, export_service, runtime)
+        start_avatar_random_walk(debug_port)
         return server, codex_proc
     except Exception:
         shutdown_helper(server)

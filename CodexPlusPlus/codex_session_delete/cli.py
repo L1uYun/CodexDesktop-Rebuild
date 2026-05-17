@@ -368,6 +368,7 @@ def run_attach(args: argparse.Namespace) -> int:
                 append_watchdog_event("attach_retry", error=repr(exc), **watchdog_status(server, debug_port, app_dir))
                 time.sleep(3)
         launcher.start_bridge_watchdog(debug_port, script_path, server.port, service, export_service, runtime)
+        launcher.start_avatar_random_walk(debug_port)
         server.watchdog_debug_port = debug_port
         server.watchdog_app_dir = app_dir
         append_watchdog_event("attach_ready", **watchdog_status(server, debug_port, app_dir))

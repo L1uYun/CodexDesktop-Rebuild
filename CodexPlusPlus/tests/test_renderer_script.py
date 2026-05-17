@@ -678,6 +678,7 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "frameIndex" in text
     assert "crawlRow" in text
     assert "87.5%" in text
+    assert "rotate(${rotate" not in text
     assert "translate3d" in text
     assert "installAvatarBionicMotion();" in text
 
