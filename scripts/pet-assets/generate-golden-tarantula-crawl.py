@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
+from PIL import Image, ImageChops, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,49 +46,44 @@ def shifted_layer(base: Image.Image, mask: Image.Image, dx: int, dy: int) -> Ima
 
 
 def crawl_frame(base: Image.Image, step: int) -> Image.Image:
-    # Distal leg groups only. The body and leg roots remain fixed, which keeps
-    # the cutout sharp while the eight legs still alternate visibly.
+    # Distal leg tips only. Keep the complete source image underneath so no
+    # transparent holes can reveal the Codex UI behind the pet.
     top_a = binary_mask(
         base,
         [
-            [(30, 54), (78, 34), (118, 44), (118, 82), (42, 78)],
-            [(86, 32), (158, 42), (160, 76), (94, 70)],
+            [(36, 48), (78, 28), (102, 42), (82, 58), (40, 66)],
+            [(122, 38), (174, 44), (172, 66), (122, 62)],
         ],
     )
     bottom_a = binary_mask(
         base,
         [
-            [(28, 132), (76, 126), (120, 136), (116, 174), (42, 168)],
-            [(88, 138), (160, 132), (164, 166), (96, 176)],
+            [(36, 142), (82, 130), (104, 146), (78, 164), (42, 170)],
+            [(122, 142), (174, 132), (176, 154), (126, 166)],
         ],
     )
     top_b = binary_mask(
         base,
         [
-            [(18, 78), (74, 64), (116, 76), (112, 108), (34, 110)],
-            [(86, 68), (174, 78), (170, 108), (96, 104)],
+            [(18, 76), (58, 62), (86, 72), (62, 90), (20, 96)],
+            [(136, 72), (184, 82), (180, 104), (136, 98)],
         ],
     )
     bottom_b = binary_mask(
         base,
         [
-            [(20, 104), (76, 104), (118, 114), (112, 146), (34, 142)],
-            [(86, 108), (174, 104), (172, 136), (96, 146)],
+            [(18, 110), (58, 104), (86, 116), (62, 134), (22, 136)],
+            [(136, 110), (184, 106), (184, 128), (138, 136)],
         ],
     )
-    moving = ImageChops.lighter(ImageChops.lighter(top_a, bottom_a), ImageChops.lighter(top_b, bottom_b))
-    fixed_alpha = ImageChops.subtract(base.getchannel("A"), moving.filter(ImageFilter.MaxFilter(3)))
-    fixed = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    fixed.alpha_composite(base)
-    fixed.putalpha(fixed_alpha)
 
     phase = step % 8
-    stride = [0, 2, 4, 2, 0, -2, -4, -2][phase]
-    lift = [0, -1, -2, -1, 0, 1, 2, 1][phase]
+    stride = [0, 2, 3, 2, 0, -2, -3, -2][phase]
+    lift = [0, -1, -1, -1, 0, 1, 1, 1][phase]
     opposing_stride = -stride
     opposing_lift = -lift
     out = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    out.alpha_composite(fixed)
+    out.alpha_composite(base)
     out.alpha_composite(shifted_layer(base, top_a, stride, lift))
     out.alpha_composite(shifted_layer(base, bottom_a, opposing_stride, opposing_lift))
     out.alpha_composite(shifted_layer(base, top_b, opposing_stride, lift))
