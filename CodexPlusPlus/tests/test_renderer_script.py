@@ -668,10 +668,8 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "setTimeout(installAvatarBionicMotion, 250)" in text
     assert "requestAnimationFrame(step)" in text
     assert ".codex-avatar-root" in text
-    assert 'target.style.width = "88px"' in text
-    assert 'target.style.height = "95px"' in text
-    assert 'body.style.width = "88px"' in text
-    assert 'body.style.height = "95px"' in text
+    assert "target.style.width" not in text
+    assert "body.style.width" not in text
     assert "backgroundPosition" in text
     assert "frameIndex" in text
     assert "crawlRow" in text

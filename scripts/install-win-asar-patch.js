@@ -49,7 +49,6 @@ function copyCodexPlusPlus(installDir) {
   const targetRoot = path.join(installDir, "resources", "CodexPlusPlus");
   const targetPackage = path.join(targetRoot, "codex_session_delete");
   if (!fs.existsSync(sourcePackage)) throw new Error(`Missing CodexPlusPlus source package: ${sourcePackage}`);
-  if (fs.existsSync(targetRoot)) fs.rmSync(targetRoot, { recursive: true, force: true });
   fs.mkdirSync(targetRoot, { recursive: true });
   copyRecursive(sourcePackage, targetPackage);
   console.log("[plusplus] installed CodexPlusPlus Python package");

@@ -75,15 +75,11 @@
     if (target.dataset.codexAvatarBionicMotion === motionVersion) return;
     cancelAnimationFrame(window.__codexAvatarBionicMotionFrame);
     target.dataset.codexAvatarBionicMotion = motionVersion;
-    target.style.width = "88px";
-    target.style.height = "95px";
     target.style.transformOrigin = "50% 72%";
     target.style.willChange = "auto";
     target.style.transition = "none";
     target.style.transform = "translate3d(0, 0, 0)";
     if (body) {
-      body.style.width = "88px";
-      body.style.height = "95px";
       body.style.transformOrigin = "50% 78%";
       body.style.willChange = "transform";
     }
