@@ -33,6 +33,20 @@ def test_avatar_direction_sector_has_hysteresis():
     assert launcher._avatar_direction_sector(4, 0) == 0
 
 
+def test_avatar_move_uses_official_overlay_ipc(monkeypatch):
+    calls = []
+    monkeypatch.setattr(launcher, "evaluate_script", lambda websocket_url, script: calls.append((websocket_url, script)))
+
+    launcher._move_avatar_window("ws://avatar", 123, 456)
+
+    assert calls == [
+        (
+            "ws://avatar",
+            "window.electronBridge.sendMessageFromView({type:'avatar-overlay-auto-move',left:123,top:456});",
+        )
+    ]
+
+
 def test_avatar_random_walk_moves_avatar_target_inside_primary_work_area(monkeypatch):
     calls = []
     times = iter([10.0, 10.12])

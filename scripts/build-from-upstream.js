@@ -293,6 +293,8 @@ function buildWin(platform) {
   patchRebuildAsarMetadata(asarDir);
   patchRebuildBootstrap(asarDir);
   runPatchScript("patch-rebuild-windows-thread-path-preflight.js", "win");
+  patchRebuildAvatarAutoOpen(asarDir);
+  patchRebuildAvatarAutoMove(asarDir);
   patchRebuildWindowsImmediateExit(asarDir);
   patchRebuildChildProcessGoneFatal(asarDir);
   patchRebuildBundledMarketplaceRoot(asarDir);
@@ -720,6 +722,36 @@ function patchRebuildAvatarAutoOpen(asarDir) {
   if (!patched) console.log("   [!] main avatar auto-open insertion point not found");
 }
 
+function patchRebuildAvatarAutoMove(asarDir) {
+  const buildDir = path.join(asarDir, ".vite", "build");
+  if (!fs.existsSync(buildDir)) {
+    console.log("   [!] build dir not found for Rebuild avatar auto-move patch");
+    return;
+  }
+  let patched = false;
+  for (const entry of fs.readdirSync(buildDir)) {
+    if (!/^main.*\.js$/.test(entry)) continue;
+    const filePath = path.join(buildDir, entry);
+    let text = fs.readFileSync(filePath, "utf-8");
+    if (text.includes("avatar-overlay-auto-move")) {
+      patched = true;
+      continue;
+    }
+    const methodNeedle = "setElementSize(e,{mascot:t,tray:n}){";
+    const methodPatch = "autoMove(e,t,r){let i=this.window;if(i==null||i.isDestroyed()||i.webContents.id!==e||!Number.isFinite(t)||!Number.isFinite(r))return;this.cancelMomentum();let a=this.getLayout(i),o={x:t+a.mascot.left,y:r+a.mascot.top,width:this.anchor.width,height:this.anchor.height};this.anchor=o,this.applyLayout(i,n.screen.getDisplayNearestPoint(FU(o)).bounds),this.persistWindowBounds(i)}";
+    if (!text.includes(methodNeedle)) continue;
+    text = text.replace(methodNeedle, `${methodPatch}${methodNeedle}`);
+    const caseNeedle = "case`avatar-overlay-element-size-changed`:this.avatarOverlayManager.setElementSize(r.id,{isTrayVisible:i.isTrayVisible,mascot:i.mascot,tray:i.tray});break;";
+    const casePatch = `${caseNeedle}case\`avatar-overlay-auto-move\`:this.avatarOverlayManager.autoMove(r.id,i.left,i.top);break;`;
+    if (!text.includes(caseNeedle)) continue;
+    text = text.replace(caseNeedle, casePatch);
+    fs.writeFileSync(filePath, text, "utf-8");
+    patched = true;
+    console.log(`   [avatar] patched Rebuild avatar auto-move in ${entry}`);
+  }
+  if (!patched) console.log("   [!] avatar auto-move insertion point not found");
+}
+
 function getRebuildLifecycleTraceRuntimeSnippet() {
   return `try{let e=require(\`node:fs\`),t=require(\`node:path\`),i=t.join(n.app.getPath(\`appData\`),\`CodexRebuild\`,\`rebuild-lifecycle.log\`),a=(...n)=>{try{e.mkdirSync(t.dirname(i),{recursive:!0});e.appendFileSync(i,new Date().toISOString()+\` \`+n.map(e=>typeof e==\`string\`?e:JSON.stringify(e)).join(\` \`)+\`\\n\`)}catch{}};globalThis.__codexRebuildTrace=a;a(\`trace-installed\`,\`execPath=\${process.execPath}\`,\`argv=\${JSON.stringify(process.argv)}\`,\`ppid=\${process.ppid}\`);let o=n.app.exit.bind(n.app),s=n.app.quit.bind(n.app);n.app.exit=(...e)=>(a(\`app.exit\`,e,new Error().stack),o(...e));n.app.quit=(...e)=>(a(\`app.quit\`,e,new Error().stack),s(...e));n.app.on(\`ready\`,()=>a(\`ready\`));n.app.on(\`browser-window-created\`,()=>a(\`browser-window-created\`));n.app.on(\`second-instance\`,(e,t)=>a(\`second-instance\`,JSON.stringify(t)));n.app.on(\`before-quit\`,()=>a(\`before-quit\`));n.app.on(\`will-quit\`,()=>a(\`will-quit\`));n.app.on(\`window-all-closed\`,()=>a(\`window-all-closed\`));process.on(\`exit\`,e=>a(\`process.exit-event\`,String(e)));process.on(\`beforeExit\`,e=>a(\`process.beforeExit\`,String(e)));process.on(\`uncaughtException\`,e=>a(\`uncaughtException\`,e&&e.stack||String(e)));process.on(\`unhandledRejection\`,e=>a(\`unhandledRejection\`,e&&e.stack||String(e)))}catch{}`;
 }
@@ -978,6 +1010,7 @@ function main() {
     patchRebuildAsarMetadata(asarDir);
     patchRebuildBootstrap(asarDir);
     patchRebuildAvatarAutoOpen(asarDir);
+    patchRebuildAvatarAutoMove(asarDir);
     patchRebuildWindowsImmediateExit(asarDir);
     patchRebuildChildProcessGoneFatal(asarDir);
     patchRebuildBundledMarketplaceRoot(asarDir);

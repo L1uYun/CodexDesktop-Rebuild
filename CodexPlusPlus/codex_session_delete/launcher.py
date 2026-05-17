@@ -1001,7 +1001,14 @@ def _avatar_window_bounds(websocket_url: str) -> dict[str, int]:
 
 
 def _move_avatar_window(websocket_url: str, left: int, top: int) -> None:
-    evaluate_script(websocket_url, f"window.moveTo({int(left)}, {int(top)});")
+    evaluate_script(
+        websocket_url,
+        (
+            "window.electronBridge.sendMessageFromView("
+            f"{{type:'avatar-overlay-auto-move',left:{int(left)},top:{int(top)}}}"
+            ");"
+        ),
+    )
 
 
 def _set_avatar_walk_direction(websocket_url: str, direction_sector: int) -> None:
