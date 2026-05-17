@@ -12,19 +12,30 @@ const fs = require("fs");
 const { locateBundles, relPath } = require("./patch-util");
 
 function patchSource(source) {
-  const original =
+  const originalCombined =
     "function Xv(e){for(let t of e.items){if(t.type===`userMessage`)return t.id;if(t.type===`steeringUserMessage`)return t.restoreMessage.id}return null}function Zv(e){let t=null;for(let n of e.items)n.type===`agentMessage`&&(t=n.id);return t}function Qv(e){let t=new Set;for(let n of e.params.input)for(let e of ey(n))$v(t,e);for(let n of e.items)if(n.type===`commandExecution`)for(let e of n.commandActions??[])for(let n of ny(e))$v(t,n);return Array.from(t).sort()}";
-  const replacement =
+  const replacementCombined =
     "function Xv(e){for(let t of e.items??[]){if(t?.type===`userMessage`)return t.id;if(t?.type===`steeringUserMessage`)return t.restoreMessage?.id??null}return null}function Zv(e){let t=null;for(let n of e.items??[])n?.type===`agentMessage`&&(t=n.id);return t}function Qv(e){let t=new Set;for(let n of e.params.input)for(let e of ey(n))$v(t,e);for(let n of e.items??[])if(n?.type===`commandExecution`)for(let e of n.commandActions??[])for(let n of ny(e))$v(t,n);return Array.from(t).sort()}";
 
-  if (source.includes(replacement)) {
+  let patched = source;
+  patched = patched.replace(originalCombined, replacementCombined);
+  patched = patched
+    .replaceAll("for(let t of e.items){if(t.type===`userMessage`)", "for(let t of e.items??[]){if(t?.type===`userMessage`)")
+    .replaceAll("if(t.type===`steeringUserMessage`)return t.restoreMessage.id", "if(t?.type===`steeringUserMessage`)return t.restoreMessage?.id??null")
+    .replaceAll("for(let n of e.items)n.type===`agentMessage`", "for(let n of e.items??[])n?.type===`agentMessage`")
+    .replaceAll("for(let n of e.items)if(n.type===`commandExecution`)", "for(let n of e.items??[])if(n?.type===`commandExecution`)");
+
+  const hasAnyGuard =
+    patched.includes("e.items??[]") &&
+    (patched.includes("?.type===`agentMessage`") || patched.includes("?.type===`commandExecution`") || patched.includes("?.type===`userMessage`"));
+  if (patched === source && hasAnyGuard) {
     return { source, changed: false, failed: false, reason: "local thread item guards already patched" };
   }
-  if (!source.includes(original)) {
+  if (patched === source) {
     return { source, changed: false, failed: true, reason: "local thread analytics helper pattern not found" };
   }
   return {
-    source: source.replace(original, replacement),
+    source: patched,
     changed: true,
     failed: false,
     reason: "added Rebuild local thread item guards",

@@ -1,7 +1,7 @@
 # Upstream Sync Runbook
 
 This runbook captures the Windows sync and recovery process used after the
-official Codex app moved to `26.513.3673.0`. Use it whenever official Codex is
+official Codex app moved to `26.513.4821.0`. Use it whenever official Codex is
 updated and Rebuild needs to be regenerated, reinstalled, and revalidated.
 
 ## Source Projects
@@ -44,7 +44,7 @@ Get-ChildItem "C:\Program Files\WindowsApps" -Directory |
 For a known installed version, set:
 
 ```powershell
-$env:CODEX_OFFICIAL_APP_DIR = "C:\Program Files\WindowsApps\OpenAI.Codex_26.513.3673.0_x64__2p2nqsd0c76g0\app"
+$env:CODEX_OFFICIAL_APP_DIR = "C:\Program Files\WindowsApps\OpenAI.Codex_26.513.4821.0_x64__2p2nqsd0c76g0\app"
 ```
 
 The build script also auto-discovers this path when `CODEX_OFFICIAL_APP_DIR` is
