@@ -55,13 +55,13 @@ watcher checks needed to reproduce this Rebuild sync safely.
 
 The `CodexPlusPlus/` directory vendors the Codex++ launcher and helper service so the Rebuild package and the PlusPlus integration can be versioned together in this repository.
 
-For current Rebuild builds, the PlusPlus watcher runs in observe-only mode by default. It no longer kills a normally started `CodexRebuild.exe` and relaunches it with `--remote-debugging-port`, which prevents the startup loop that made Rebuild appear to flash, hang, and close. Manual PlusPlus launch/injection is still available from the `CodexPlusPlus/` project.
+For current Rebuild builds, launching `CodexRebuild.exe` automatically enables CDP on port `19339`, starts the bundled PlusPlus helper, and attaches Codex++ to the already running Rebuild window. The visible Codex++ entry is also pinned as a small fixed button in the upper-right corner, so it does not depend on Codex's native header layout. Manual PlusPlus launch/injection is still available from the `CodexPlusPlus/` project.
 
 To intentionally restore watcher takeover behavior for debugging, set:
 
 ```powershell
 $env:CODEX_PLUS_PLUS_WATCHER_TAKEOVER = "1"
-python -m codex_session_delete watch --debug-port 9239
+python -m codex_session_delete watch --debug-port 19339
 ```
 
 ## Project Structure

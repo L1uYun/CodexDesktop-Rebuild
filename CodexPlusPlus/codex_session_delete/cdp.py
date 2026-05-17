@@ -35,9 +35,13 @@ def list_targets(port: int) -> list[dict[str, object]]:
 def pick_page_target(targets: list[dict[str, object]]) -> dict[str, object]:
     pages = [target for target in targets if target.get("type") == "page" and target.get("webSocketDebuggerUrl")]
     for target in pages:
+        url = str(target.get("url", ""))
+        if url == "app://-/index.html":
+            return target
+    for target in pages:
         title = str(target.get("title", ""))
         url = str(target.get("url", ""))
-        if "codex" in (title + " " + url).lower():
+        if "codex" in (title + " " + url).lower() and "avatar-overlay" not in url:
             return target
     if pages:
         return pages[0]

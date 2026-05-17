@@ -59,7 +59,7 @@ def test_watch_loop_exits_on_non_windows(monkeypatch, tmp_path):
 
 
 def test_watch_loop_default_debug_port_is_rebuild_specific():
-    assert watcher.DEFAULT_DEBUG_PORT == 9239
+    assert watcher.DEFAULT_DEBUG_PORT == 19339
 
 
 def test_wait_until_no_codex_success(monkeypatch):

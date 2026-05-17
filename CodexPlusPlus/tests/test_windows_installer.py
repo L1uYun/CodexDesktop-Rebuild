@@ -47,7 +47,7 @@ def test_default_windows_launcher_uses_current_python_executable(tmp_path):
     assert "-m codex_session_delete start" in script
     assert "--app-dir" in script
     assert "D:\\software\\CodexRebuild" in script
-    assert "--debug-port 9239" in script
+    assert "--debug-port 19339" in script
     assert "pythonw.exe" in script or "python.exe" in script
 
 

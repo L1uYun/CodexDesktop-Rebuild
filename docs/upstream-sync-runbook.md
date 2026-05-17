@@ -28,7 +28,9 @@ After every official Codex update, Rebuild should:
 - Keep automation gates and Chrome/browser-use trust patches applied.
 - Keep Archived chats usable from local `archived_sessions` when ChatGPT cloud
   task history is unreachable.
-- Keep CodexPlusPlus watcher in observe-only mode by default.
+- Auto-start bundled CodexPlusPlus attach when `CodexRebuild.exe` launches, with
+  CDP enabled on port `19339` and a visible Codex++ button in the upper-right
+  corner.
 
 ## Official App Discovery
 
@@ -110,13 +112,13 @@ was:
 codex-cli 0.131.0-alpha.9
 ```
 
-## CodexPlusPlus Watcher Rule
+## CodexPlusPlus Attach Rule
 
 The previous flash/crash loop was not caused by the Rebuild launcher itself. It
-was caused by the CodexPlusPlus watcher:
+was caused by the CodexPlusPlus watcher takeover path:
 
 ```text
-pythonw.exe -m codex_session_delete watch --debug-port 9239
+pythonw.exe -m codex_session_delete watch --debug-port 19339
 ```
 
 The old watcher killed a normally started `CodexRebuild.exe` and relaunched it
@@ -126,30 +128,30 @@ with:
 --remote-debugging-port=<port> --remote-allow-origins=http://127.0.0.1:<port>
 ```
 
-That relaunch path made the window appear to flash, hang, and disappear. The
-watcher is now observe-only by default. It should log:
+That relaunch path made the window appear to flash, hang, and disappear.
+Current builds avoid takeover. The Rebuild bootstrap enables CDP before Electron
+creates windows, bundles `resources\CodexPlusPlus`, then attaches to the already
+running Rebuild process:
 
 ```text
-watcher started (... takeover_enabled=False)
-Codex running without CDP (...); takeover disabled
+pythonw.exe -m codex_session_delete attach --app-dir D:\software\CodexRebuild --debug-port 19339
 ```
 
-Only enable takeover intentionally for debugging:
+The injected renderer should create a visible `Codex++` launcher at the
+upper-right corner, even when the native header insertion point changes.
+
+Only use the legacy watcher takeover intentionally for debugging:
 
 ```powershell
 $env:CODEX_PLUS_PLUS_WATCHER_TAKEOVER = "1"
-python -m codex_session_delete watch --debug-port 9239
+python -m codex_session_delete watch --debug-port 19339
 ```
 
 ## Stability Verification
 
-Start the watcher and Rebuild:
+Start Rebuild:
 
 ```powershell
-Start-Process "D:\Python3.11.1\pythonw.exe" `
-  -ArgumentList @("-m","codex_session_delete","watch","--debug-port","9239") `
-  -WindowStyle Hidden
-
 Start-Process "D:\software\CodexRebuild\CodexRebuild.exe"
 ```
 
@@ -170,7 +172,10 @@ Expected result:
 
 - Main `CodexRebuild.exe` remains alive.
 - It may briefly report `Responding=False` during startup, but it should recover.
-- No new top-level Rebuild process should appear with `--remote-debugging-port`.
+- Renderer processes should carry `--remote-debugging-port=19339`.
+- No second top-level Rebuild relaunch should be spawned by Python.
+- One `pythonw.exe -m codex_session_delete attach ... --debug-port 19339` helper
+  should stay alive while Rebuild is running.
 - `codex-rebuild.exe app-server --analytics-default-enabled` remains under
   Rebuild.
 - `node_repl.exe` and stdio app-server children may appear after tool runtime
@@ -179,13 +184,13 @@ Expected result:
 Check the logs:
 
 ```powershell
-Get-Content "$env:USERPROFILE\.codex-rebuild-plus-plus\watcher.log" -Tail 40
+Get-Content "$env:USERPROFILE\.codex-rebuild-plus-plus\watchdog.log" -Tail 40
 Get-Content "$env:APPDATA\CodexRebuild\rebuild-lifecycle.log" -Tail 80
 ```
 
 The lifecycle log should contain `trace-installed`, `ready`, and
-`browser-window-created`. It must not contain temporary diagnostic environment
-dumps.
+`plusplus-attach`. The watchdog log should contain `attach_ready`. It must not
+contain temporary diagnostic environment dumps.
 
 ## Automation Verification
 
@@ -368,11 +373,12 @@ Get-CimInstance Win32_Process |
 If the parent is:
 
 ```text
-pythonw.exe -m codex_session_delete launch --app-dir D:\software\CodexRebuild --debug-port 9239
+pythonw.exe -m codex_session_delete launch --app-dir D:\software\CodexRebuild --debug-port 19339
 ```
 
-then the watcher is still doing takeover. Update `CodexPlusPlus/` and confirm
-`takeover_enabled=False`.
+then the legacy watcher is still doing takeover. Update `CodexPlusPlus/` and
+confirm Rebuild bootstrap starts `codex_session_delete attach`, not `watch` or
+`launch`.
 
 ## Pre-Commit Checklist
 
@@ -380,6 +386,7 @@ Before pushing an upstream sync:
 
 ```powershell
 python -m pytest CodexPlusPlus\tests\test_watcher.py CodexPlusPlus\tests\test_launcher_cli.py -q
+Push-Location CodexPlusPlus; python -m pytest tests\test_renderer_script.py -q; Pop-Location
 git diff --cached --check
 ```
 

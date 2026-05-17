@@ -21,7 +21,7 @@ from codex_session_delete.rebuild_config import (
     WATCHER_RUN_NAME,
     WATCHER_STARTUP_SHORTCUT_NAME,
 )
-from codex_session_delete import updater
+from codex_session_delete import launcher, updater
 from codex_session_delete import watcher
 
 
@@ -39,6 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     start_parser = subparsers.add_parser("start", help="One-click start Codex Rebuild with CodexRebuild++")
     add_launch_arguments(start_parser)
+
+    attach_parser = subparsers.add_parser("attach", help="Attach Codex++ to an already running Codex Rebuild with CDP enabled")
+    add_launch_arguments(attach_parser)
 
     launch_parser = subparsers.add_parser("launch", help="Launch Codex with Codex++ injection")
     add_launch_arguments(launch_parser)
@@ -60,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     watch_parser = subparsers.add_parser("watch", help="Run the Codex watcher loop (auto-reinject when Codex is launched normally)")
     watch_parser.add_argument("--debug-port", type=int, default=DEFAULT_DEBUG_PORT)
+
+    watch_start_parser = subparsers.add_parser("watch-start", help="Start the Codex watcher in the background if it is not already running")
+    watch_start_parser.add_argument("--debug-port", type=int, default=DEFAULT_DEBUG_PORT)
 
     watch_install_parser = subparsers.add_parser("watch-install", help="Register the watcher to run at Windows logon")
     watch_install_parser.add_argument("--debug-port", type=int, default=DEFAULT_DEBUG_PORT)
@@ -257,7 +263,7 @@ def watcher_process_running(debug_port: int) -> bool:
         return False
     script = (
         "Get-CimInstance Win32_Process -Filter \"Name='pythonw.exe' OR Name='python.exe'\" | "
-        "Where-Object {{ $_.CommandLine -match 'codex_session_delete\\s+watch' -and "
+        "Where-Object {{ $_.CommandLine -match 'codex_session_delete\\s+watch(\\s|$)' -and "
         "$_.CommandLine -match '--debug-port\\s+{}(\\s|$)' }} | "
         "Select-Object -First 1 -ExpandProperty ProcessId"
     ).format(debug_port)
@@ -294,6 +300,50 @@ def start_watcher_background(debug_port: int) -> None:
 def run_start(args: argparse.Namespace) -> int:
     start_watcher_background(args.debug_port)
     return run_launch(args)
+
+
+def run_attach(args: argparse.Namespace) -> int:
+    maybe_print_update_notice()
+    app_dir = args.app_dir
+    debug_port = args.debug_port
+    helper_port = args.helper_port
+    service = launcher.ApiFirstDeleteService(
+        launcher.UnavailableApiAdapter(),
+        args.db,
+        args.backup_dir,
+    )
+    export_service = launcher.MarkdownExportService(args.db)
+    user_config_dir = launcher.user_scripts_config_dir()
+    runtime = launcher.CodexPlusRuntime(
+        None,
+        launcher.UserScriptManager(
+            Path(launcher.__file__).parent / "user_scripts",
+            user_config_dir / "user_scripts",
+            user_config_dir / "user_scripts.json",
+        ),
+        debug_port,
+    )
+    server = launcher.start_helper(service, export_service, port=helper_port)
+    codex_proc = launcher.running_windows_codex_process_id(app_dir)
+    try:
+        script_path = Path(launcher.__file__).parent / "inject" / "renderer-inject.js"
+        server.bridge_socket = launcher.inject_with_retry(
+            debug_port,
+            script_path,
+            server.port,
+            service,
+            export_service,
+            runtime,
+        )
+        server.watchdog_debug_port = debug_port
+        server.watchdog_app_dir = app_dir
+        append_watchdog_event("attach_ready", **watchdog_status(server, debug_port, app_dir))
+        wait_for_shutdown(server, codex_proc)
+    except Exception as exc:
+        log_launch_failure(exc)
+        shutdown_helper(server)
+        raise
+    return 0
 
 
 def print_release_notice(release: updater.Release) -> None:
@@ -441,8 +491,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "start":
         return run_start(args)
+    if args.command == "attach":
+        return run_attach(args)
     if args.command == "watch":
         return watcher.watch_loop(debug_port=args.debug_port)
+    if args.command == "watch-start":
+        start_watcher_background(args.debug_port)
+        return 0
     if args.command == "watch-install":
         install_watcher_logon_task(args.debug_port)
         return 0

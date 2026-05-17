@@ -23,6 +23,7 @@
   const codexDeleteStyleVersion = "7";
   const codexPlusMenuId = "codex-plus-menu";
   const codexPlusMenuFloatingClass = "codex-plus-menu-floating";
+  const codexPlusLauncherId = "codex-plus-launcher";
   const codexDeleteVersion = "6";
   const codexExportVersion = "1";
   const codexProjectMoveVersion = "1";
@@ -238,6 +239,25 @@
         flex: 0 0 auto;
         pointer-events: auto;
         -webkit-app-region: no-drag;
+      }
+      #${codexPlusLauncherId} {
+        position: fixed;
+        top: 10px;
+        right: 14px;
+        z-index: 2147483645;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: auto;
+        -webkit-app-region: no-drag;
+      }
+      #${codexPlusLauncherId} .codex-plus-trigger {
+        border: 1px solid rgba(255,255,255,.16);
+        border-radius: 7px;
+        background: rgba(31,41,55,.94);
+        color: #f9fafb;
+        box-shadow: 0 10px 30px rgba(0,0,0,.24);
       }
       .codex-plus-trigger {
         display: inline-flex;
@@ -787,11 +807,11 @@
   }
 
   function removeDuplicateCodexPlusMenus(keep) {
-    document.querySelectorAll(`#${codexPlusMenuId}, [data-codex-plus-menu="true"]`).forEach((node) => {
+    document.querySelectorAll(`#${codexPlusMenuId}, [data-codex-plus-menu="true"], #${codexPlusLauncherId}`).forEach((node) => {
       if (node !== keep) node.remove();
     });
     Array.from(document.querySelectorAll("button")).forEach((button) => {
-      if ((button.textContent || "").trim() === `Codex++ ${codexPlusVersion}` && !button.closest(`#${codexPlusMenuId}`)) {
+      if ((button.textContent || "").trim() === `Codex++ ${codexPlusVersion}` && !button.closest(`#${codexPlusMenuId}, #${codexPlusLauncherId}`)) {
         button.remove();
       }
     });
@@ -876,6 +896,7 @@
     } else if (existing && insertionPoint && existing.parentElement === insertionPoint.parent) {
       configureCodexPlusTrigger(existing, existing.querySelector("button"), insertionPoint.nativeButtonClass);
       removeDuplicateCodexPlusMenus(existing);
+      installCodexPlusLauncher();
       return;
     }
     const menu = document.createElement("div");
@@ -903,6 +924,32 @@
       updateFloatingCodexPlusMenuPosition(menu);
     }
     removeDuplicateCodexPlusMenus(menu);
+    installCodexPlusLauncher();
+  }
+
+  function installCodexPlusLauncher() {
+    const existing = document.getElementById(codexPlusLauncherId);
+    if (existing?.dataset.codexPlusLauncherVersion === "1") {
+      configureCodexPlusTrigger(existing, existing.querySelector("button"), "codex-plus-trigger");
+      return;
+    }
+    existing?.remove();
+    const launcher = document.createElement("div");
+    launcher.id = codexPlusLauncherId;
+    launcher.dataset.codexPlusLauncherVersion = "1";
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "codex-plus-trigger";
+    trigger.textContent = `Codex++ ${codexPlusVersion}`;
+    const indicator = document.createElement("span");
+    indicator.className = "codex-plus-backend-indicator";
+    indicator.dataset.codexBackendIndicator = "true";
+    indicator.dataset.status = codexPlusBackendStatus.status || "checking";
+    trigger.prepend(indicator);
+    configureCodexPlusTrigger(launcher, trigger, "codex-plus-trigger");
+    launcher.appendChild(trigger);
+    document.documentElement.appendChild(launcher);
+    renderBackendStatus();
   }
 
   function reactFiberFrom(element) {
@@ -2626,7 +2673,7 @@
   }
 
   function isExtensionUiNode(node) {
-    return !!node?.closest?.(`.codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, .${projectMoveOverlayClass}, .${timelineClass}, .codex-conversation-timeline, #codex-plus-menu`);
+    return !!node?.closest?.(`.codex-delete-toast, .codex-delete-confirm-overlay, .codex-plus-modal-overlay, .${projectMoveOverlayClass}, .${timelineClass}, .codex-conversation-timeline, #codex-plus-menu, #codex-plus-launcher`);
   }
 
   const scanRelevantSelector = [

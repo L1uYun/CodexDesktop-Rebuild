@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from codex_session_delete import cli, launcher
+from codex_session_delete import cdp
 from codex_session_delete.launcher import build_codex_command, launch_codex_app, packaged_app_user_model_id
 
 
@@ -182,6 +183,72 @@ def test_cli_launch_subcommand_keeps_helper_server_alive_after_injection(monkeyp
     assert exit_code == 0
     assert waited == [57321]
     assert len(calls) == 1
+
+
+def test_cli_watch_start_starts_background_watcher(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cli, "start_watcher_background", lambda debug_port: calls.append(debug_port))
+
+    exit_code = cli.main(["watch-start", "--debug-port", "9333"])
+
+    assert exit_code == 0
+    assert calls == [9333]
+
+
+def test_cli_attach_injects_without_launching_codex(monkeypatch, tmp_path):
+    events = []
+    fake_server = FakeServer()
+    monkeypatch.setattr(cli, "maybe_print_update_notice", lambda: None)
+    monkeypatch.setattr(cli, "append_watchdog_event", lambda *args, **kwargs: events.append(args[0]))
+    monkeypatch.setattr(cli, "watchdog_status", lambda *args, **kwargs: {})
+    monkeypatch.setattr(cli, "wait_for_shutdown", lambda server, proc: events.append(("wait", proc)))
+    monkeypatch.setattr(cli.launcher, "start_helper", lambda *args, **kwargs: fake_server)
+    monkeypatch.setattr(cli.launcher, "running_windows_codex_process_id", lambda app_dir: 1234)
+    monkeypatch.setattr(cli.launcher, "inject_with_retry", lambda *args, **kwargs: {"result": {}})
+    monkeypatch.setattr(cli.launcher, "user_scripts_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(cli.launcher.subprocess, "Popen", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should not launch Codex")))
+
+    exit_code = cli.main(["attach", "--app-dir", str(tmp_path), "--db", str(tmp_path / "state.sqlite"), "--backup-dir", str(tmp_path / "backups")])
+
+    assert exit_code == 0
+    assert "attach_ready" in events
+    assert ("wait", 1234) in events
+
+
+def test_pick_page_target_prefers_main_codex_page_over_avatar_overlay():
+    targets = [
+        {
+            "type": "page",
+            "title": "Codex",
+            "url": "app://-/index.html?initialRoute=%2Favatar-overlay",
+            "webSocketDebuggerUrl": "ws://overlay",
+        },
+        {
+            "type": "page",
+            "title": "Codex",
+            "url": "app://-/index.html",
+            "webSocketDebuggerUrl": "ws://main",
+        },
+    ]
+
+    assert cdp.pick_page_target(targets)["webSocketDebuggerUrl"] == "ws://main"
+
+
+def test_watcher_process_running_does_not_match_watch_start(monkeypatch):
+    captured = []
+
+    class Result:
+        stdout = ""
+
+    def fake_run(args, **kwargs):
+        captured.append(args[-1])
+        return Result()
+
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    assert cli.watcher_process_running(9239) is False
+    assert "codex_session_delete\\s+watch(\\s|$)" in captured[0]
 
 
 def test_cli_install_dispatches_to_platform_installer(monkeypatch, tmp_path):

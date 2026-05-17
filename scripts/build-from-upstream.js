@@ -344,6 +344,7 @@ function buildWin(platform) {
   // with the official desktop app because the app-server protocol is coupled
   // to the Electron bundle.
   addRebuildCodex(platform, resourcesDir, REBUILD_CLI_NAME);
+  copyCodexPlusPlus(resourcesDir);
 
   // Create ZIP
   const version = getVersion(asarDir);
@@ -408,6 +409,20 @@ function copyWindowsRuntimeRoot(appDir, outApp) {
       fs.copyFileSync(sourcePath, targetPath);
     }
   }
+}
+
+function copyCodexPlusPlus(resourcesDir) {
+  const sourcePackage = path.join(PROJECT_ROOT, "CodexPlusPlus", "codex_session_delete");
+  if (!fs.existsSync(sourcePackage)) {
+    console.log("   [!] CodexPlusPlus source package not found");
+    return;
+  }
+  const targetRoot = path.join(resourcesDir, "CodexPlusPlus");
+  const targetPackage = path.join(targetRoot, "codex_session_delete");
+  if (fs.existsSync(targetRoot)) fs.rmSync(targetRoot, { recursive: true, force: true });
+  fs.mkdirSync(targetRoot, { recursive: true });
+  copyRecursive(sourcePackage, targetPackage);
+  console.log("   [plusplus] bundled CodexPlusPlus Python package");
 }
 
 function isWindowsRootResource(name) {
@@ -487,6 +502,7 @@ function patchRebuildBootstrap(asarDir) {
     text = patchBootstrapWindowsStatePathPreflight(text);
     text = patchBootstrapRebuildRuntimeEnv(text);
     text = patchBootstrapRebuildLifecycleTrace(text);
+    text = patchBootstrapRebuildPlusPlusAutoStart(text);
     text = patchBootstrapAppUserModelOverride(text);
     text = patchBootstrapRebuildProductNameOverride(text);
     text = patchBootstrapRebuildUpdaterSkip(text);
@@ -516,6 +532,7 @@ function patchRebuildBootstrap(asarDir) {
   text = patchBootstrapWindowsStatePathPreflight(text);
   text = patchBootstrapRebuildRuntimeEnv(text);
   text = patchBootstrapRebuildLifecycleTrace(text);
+  text = patchBootstrapRebuildPlusPlusAutoStart(text);
   text = patchBootstrapAppUserModelOverride(text);
   text = patchBootstrapRebuildProductNameOverride(text);
   text = patchBootstrapRebuildUpdaterSkip(text);
@@ -598,6 +615,38 @@ function patchBootstrapRebuildRuntimeEnv(text) {
   }
   console.log("   [identity] patched Rebuild runtime env for production automation store");
   return text.replace(homeExpr, `${runtimeExpr}${homeExpr}`);
+}
+
+function getRebuildPlusPlusAutoStartRuntimeSnippet() {
+  const port = "19339";
+  return [
+    "if(!process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE){process.env.CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE=`1`;try{",
+    "let e=require(`node:fs`),t=require(`node:path`),i=require(`node:child_process`),a=t.join(process.resourcesPath,`CodexPlusPlus`),o=t.join(a,`codex_session_delete`,`cli.py`);",
+    `n.app.commandLine.appendSwitch(\`remote-debugging-port\`,\`${port}\`),n.app.commandLine.appendSwitch(\`remote-allow-origins\`,\`http://127.0.0.1:${port}\`);`,
+    "if(e.existsSync(o)){let e=process.env.CODEX_PLUS_PLUS_PYTHON||`D:\\\\Python3.11.1\\\\pythonw.exe`,n=e.toLowerCase().endsWith(`pythonw.exe`)||e.toLowerCase().endsWith(`python.exe`)?[e]:[`pythonw.exe`],s={...process.env,PYTHONPATH:a+(process.env.PYTHONPATH?`;`+process.env.PYTHONPATH:``),CODEX_PLUS_PLUS_WATCHER_TAKEOVER:``};",
+    `for(let e of n){try{i.spawn(e,[\`-m\`,\`codex_session_delete\`,\`attach\`,\`--app-dir\`,t.dirname(process.execPath),\`--debug-port\`,\`${port}\`],{cwd:a,env:s,detached:!0,stdio:\`ignore\`,windowsHide:!0}).unref(),globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(\`plusplus-attach\`,\`python=\${e}\`);break}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(\`plusplus-attach-failed\`,e&&e.message||String(e))}}}`,
+    "}catch(e){globalThis.__codexRebuildTrace&&globalThis.__codexRebuildTrace(`plusplus-autostart-error`,e&&e.stack||String(e))}}",
+  ].join("");
+}
+
+function patchBootstrapRebuildPlusPlusAutoStart(text) {
+  if (text.includes("CODEX_REBUILD_PLUS_PLUS_AUTOSTART_DONE")) {
+    const refreshed = text
+      .replaceAll("`9239`", "`19339`")
+      .replaceAll("http://127.0.0.1:9239", "http://127.0.0.1:19339")
+      .replaceAll("--debug-port`,`9239`", "--debug-port`,`19339`");
+    if (refreshed !== text) {
+      console.log("   [plusplus] refreshed bootstrap PlusPlus attach port");
+    }
+    return refreshed;
+  }
+  const homeExpr = "process.env.CODEX_HOME||(process.env.CODEX_HOME=__codexRebuildHome);";
+  if (!text.includes(homeExpr)) {
+    console.log("   [!] bootstrap PlusPlus autostart insertion point not found");
+    return text;
+  }
+  console.log("   [plusplus] patched bootstrap PlusPlus attach autostart");
+  return text.replace(homeExpr, `${getRebuildPlusPlusAutoStartRuntimeSnippet()}${homeExpr}`);
 }
 
 function getRebuildLifecycleTraceRuntimeSnippet() {

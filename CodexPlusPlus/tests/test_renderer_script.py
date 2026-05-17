@@ -472,9 +472,15 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "bg-token-dropdown-background/90" not in text
     assert "backdrop-blur-xl" not in text
     assert "codex-plus-menu-floating" in text
+    assert "codex-plus-launcher" in text
+    assert "codexPlusLauncherId" in text
+    assert "installCodexPlusLauncher" in text
+    assert "installCodexPlusLauncher();\n      return;" in text
+    assert "dataset.codexPlusLauncherVersion" in text
     assert "findNativeMenuInsertionPoint" in text
     assert "if (!codexPlusSettings().nativeMenuPlacement) return null" in text
     assert "right: var(--codex-plus-menu-right, 140px)" in text
+    assert "right: 14px" in text
     assert "left: auto" in text
     assert "pointer-events: auto" in text
     assert "-webkit-app-region: no-drag" in text
@@ -486,6 +492,7 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "removeDuplicateCodexPlusMenus" in text
     assert "data-codex-plus-menu" in text
     assert "textContent || \"\").trim() === `Codex++ ${codexPlusVersion}`" in text
+    assert "!button.closest(`#${codexPlusMenuId}, #${codexPlusLauncherId}`)" in text
     assert "codexPlusMenuVersion !== \"6\"" in text
     assert "codexPlusTriggerInstalled = \"5\"" in text
     assert ".codex-plus-trigger:hover" not in text
