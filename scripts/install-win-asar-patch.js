@@ -64,15 +64,16 @@ function computeAsarHeaderHash(asarPath) {
 
 function patchExeHash(exePath, oldHash, newHash) {
   if (!fs.existsSync(exePath)) return "missing";
-  if (oldHash === newHash) return "unchanged";
   const buf = fs.readFileSync(exePath);
+  const newBuf = Buffer.from(newHash, "ascii");
+  if (buf.includes(newBuf)) return "unchanged";
   const text = buf.toString("latin1");
   const integrityRe = /(\[\{"file":"resources\\\\app\.asar","alg":"SHA256","value":")([a-f0-9]{64})("\}\])/;
   const integrityMatch = integrityRe.exec(text);
   if (integrityMatch) {
     const oldValue = integrityMatch[2];
     const idx = integrityMatch.index + integrityMatch[1].length;
-    Buffer.from(newHash, "ascii").copy(buf, idx);
+    newBuf.copy(buf, idx);
     fs.writeFileSync(exePath, buf);
     return oldValue === newHash ? `already patched at ${idx}` : `patched integrity at ${idx}`;
   }

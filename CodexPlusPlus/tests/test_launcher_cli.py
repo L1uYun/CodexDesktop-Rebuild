@@ -360,6 +360,29 @@ def test_attach_delays_plusplus_injection_until_rebuild_settles(monkeypatch, tmp
     assert events[:3] == ["inject", "watchdog", "avatar"]
 
 
+def test_attach_skips_cdp_avatar_walk_when_rebuild_main_walk_owns_it(monkeypatch, tmp_path):
+    sleeps = []
+    events = []
+    server = FakeServer()
+    monkeypatch.setenv("CODEX_REBUILD_AVATAR_MAIN_WALK", "1")
+    monkeypatch.setattr(cli, "maybe_print_update_notice", lambda: None)
+    monkeypatch.setattr(launcher, "start_or_attach_helper", lambda *args, **kwargs: server)
+    monkeypatch.setattr(launcher, "running_windows_codex_process_id", lambda app_dir: 1234)
+    monkeypatch.setattr(launcher, "inject_with_retry", lambda *args, **kwargs: events.append("inject") or launcher.cdp.MultiPageInjection())
+    monkeypatch.setattr(launcher, "start_bridge_watchdog", lambda *args, **kwargs: events.append("watchdog"))
+    monkeypatch.setattr(launcher, "start_avatar_random_walk", lambda debug_port: events.append("avatar"))
+    monkeypatch.setattr(cli, "append_watchdog_event", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "wait_for_shutdown", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "windows_process_alive", lambda process_id: True)
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    exit_code = cli.main(["attach", "--app-dir", str(tmp_path), "--debug-port", "19339"])
+
+    assert exit_code == 0
+    assert events[:2] == ["inject", "watchdog"]
+    assert "avatar" not in events
+
+
 def test_attach_main_process_injection_mode_skips_cdp(monkeypatch, tmp_path):
     events = []
     server = FakeServer()

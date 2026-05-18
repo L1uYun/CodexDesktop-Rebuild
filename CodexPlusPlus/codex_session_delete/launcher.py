@@ -1237,7 +1237,8 @@ def launch_and_inject(app_dir: Path | None, db_path: Path | None, backup_dir: Pa
             codex_proc = launch_codex_app(resolved_app_dir, debug_port)
         server.bridge_socket = inject_with_retry(debug_port, script_path, server.port, service, export_service, runtime)
         start_bridge_watchdog(debug_port, script_path, server.port, service, export_service, runtime)
-        start_avatar_random_walk(debug_port)
+        if os.environ.get("CODEX_REBUILD_AVATAR_MAIN_WALK") != "1":
+            start_avatar_random_walk(debug_port)
         return server, codex_proc
     except Exception:
         shutdown_helper(server)
