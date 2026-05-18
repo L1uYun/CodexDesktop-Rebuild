@@ -360,6 +360,26 @@ def test_attach_delays_plusplus_injection_until_rebuild_settles(monkeypatch, tmp
     assert events[:3] == ["inject", "watchdog", "avatar"]
 
 
+def test_attach_main_process_injection_mode_skips_cdp(monkeypatch, tmp_path):
+    events = []
+    server = FakeServer()
+    monkeypatch.setenv("CODEX_REBUILD_PLUS_PLUS_MAIN_INJECT", "1")
+    monkeypatch.setattr(cli, "maybe_print_update_notice", lambda: None)
+    monkeypatch.setattr(launcher, "start_or_attach_helper", lambda *args, **kwargs: server)
+    monkeypatch.setattr(launcher, "running_windows_codex_process_id", lambda app_dir: 1234)
+    monkeypatch.setattr(launcher, "inject_with_retry", lambda *args, **kwargs: events.append("inject"))
+    monkeypatch.setattr(cli, "append_watchdog_event", lambda *args, **kwargs: events.append(args[0]))
+    monkeypatch.setattr(cli, "wait_for_shutdown", lambda *args, **kwargs: events.append("wait"))
+    monkeypatch.setattr(cli.time, "sleep", lambda seconds: None)
+
+    exit_code = cli.main(["attach", "--app-dir", str(tmp_path), "--debug-port", "19339"])
+
+    assert exit_code == 0
+    assert "inject" not in events
+    assert "attach_ready_main_inject" in events
+    assert "wait" in events
+
+
 def test_launch_and_inject_returns_windows_packaged_process_id(monkeypatch, tmp_path):
     monkeypatch.setattr(launcher, "resolve_codex_app_dir", lambda app_dir=None: tmp_path)
     monkeypatch.setattr(launcher, "start_helper", lambda *args, **kwargs: FakeServer())

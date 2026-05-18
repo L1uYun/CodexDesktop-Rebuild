@@ -569,12 +569,14 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "codex-plus-backend-indicator" in text
     assert "/backend/status" in text
     assert "/backend/repair" in text
+    assert "window.__codexSessionDeleteBridge" in text
+    assert "fetch(`${helperBase}${path}`" in text
 
     assert "setAuthMethod(\"chatgpt\")" in text
     assert "patchFastModeGateOnObject" not in text
     assert "Codex++" in text
     assert "codexPlusVersion = \"1.0.7\"" in text
-    assert "Codex++ ${codexPlusVersion}" in text
+    assert 'trigger.textContent = "Codex++"' in text
     assert "提出问题" in text
     assert "https://github.com/BigPizzaV3/CodexPlusPlus/issues" in text
     assert "window.open(issueUrl, \"_blank\")" in text
@@ -614,7 +616,7 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "nativeButtonClass" in text
     assert "removeDuplicateCodexPlusMenus" in text
     assert "data-codex-plus-menu" in text
-    assert "textContent || \"\").trim() === `Codex++ ${codexPlusVersion}`" in text
+    assert "textContent || \"\").trim() === \"Codex++\"" in text
     assert "codexPlusMenuVersion !== \"6\"" in text
     assert "codexPlusTriggerInstalled = \"5\"" in text
     assert ".codex-plus-trigger:hover" not in text

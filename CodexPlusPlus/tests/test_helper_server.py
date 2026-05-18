@@ -280,6 +280,28 @@ def test_helper_server_returns_thread_sort_keys():
     assert sort_keys == {"status": "ok", "sort_keys": [{"session_id": "s1", "updated_at_ms": 1}, {"session_id": "s2", "updated_at_ms": 2}]}
 
 
+def test_helper_server_routes_bridge_requests_over_http():
+    service = FakeDeleteService()
+    calls = []
+    server = HelperServer(
+        "127.0.0.1",
+        0,
+        service,
+        bridge_handler=lambda path, payload: calls.append((path, payload)) or {"status": "ok", "message": "ready"},
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        base = f"http://127.0.0.1:{server.port}"
+        status = post_json(base + "/backend/status", {})
+    finally:
+        server.shutdown()
+        thread.join(timeout=3)
+
+    assert status == {"status": "ok", "message": "ready"}
+    assert calls == [("/backend/status", {})]
+
+
 def test_helper_server_serves_packaged_sponsor_assets():
     service = FakeDeleteService()
     server = HelperServer("127.0.0.1", 0, service)

@@ -798,12 +798,18 @@ def helper_health_ok(port: int, host: str = "127.0.0.1") -> bool:
 def start_or_attach_helper(
     service,
     export_service: MarkdownExportService | None = None,
+    runtime: CodexPlusRuntime | None = None,
     host: str = "127.0.0.1",
     port: int = 57321,
 ) -> HelperServer | AttachedHelperServer:
     if helper_health_ok(port, host):
         _log_runtime_event(f"attached existing helper host={host} port={port}")
         return AttachedHelperServer(port)
+    if export_service is not None and runtime is not None:
+        server = start_helper(service, export_service, host, port)
+        server.allow_http_mutation = True
+        server.bridge_handler = lambda path, payload: handle_bridge_request(service, export_service, path, payload, runtime)
+        return server
     return start_helper(service, export_service, host, port)
 
 
@@ -1220,7 +1226,7 @@ def launch_and_inject(app_dir: Path | None, db_path: Path | None, backup_dir: Pa
         sync_result = run_provider_sync()
         if sync_result.status == ProviderSyncStatus.SKIPPED:
             print(f"Provider sync skipped: {sync_result.message}")
-    server = start_or_attach_helper(service, export_service, port=helper_port)
+    server = start_or_attach_helper(service, export_service, runtime, port=helper_port)
     codex_proc = None
     try:
         can_reuse_windows_process = sys.platform == "win32" and resolved_app_dir.suffix != ".app"

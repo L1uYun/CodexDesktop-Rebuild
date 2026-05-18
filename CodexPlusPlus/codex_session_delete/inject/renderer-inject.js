@@ -963,7 +963,7 @@
       if (node !== keep) node.remove();
     });
     Array.from(document.querySelectorAll("button")).forEach((button) => {
-      if ((button.textContent || "").trim() === `Codex++ ${codexPlusVersion}` && !button.closest(`#${codexPlusMenuId}, #${codexPlusLauncherId}`)) {
+      if ((button.textContent || "").trim() === "Codex++" && !button.closest(`#${codexPlusMenuId}, #${codexPlusLauncherId}`)) {
         button.remove();
       }
     });
@@ -1061,7 +1061,7 @@
     menu.dataset.codexPlusMenuVersion = "6";
     const trigger = document.createElement("button");
     trigger.type = "button";
-    trigger.textContent = `Codex++ ${codexPlusVersion}`;
+    trigger.textContent = "Codex++";
     const indicator = document.createElement("span");
     indicator.className = "codex-plus-backend-indicator";
     indicator.dataset.codexBackendIndicator = "true";
@@ -1100,7 +1100,7 @@
     const trigger = document.createElement("button");
     trigger.type = "button";
     trigger.className = "codex-plus-trigger";
-    trigger.textContent = `Codex++ ${codexPlusVersion}`;
+    trigger.textContent = "Codex++";
     const indicator = document.createElement("span");
     indicator.className = "codex-plus-backend-indicator";
     indicator.dataset.codexBackendIndicator = "true";
@@ -1280,10 +1280,15 @@
   }
 
   async function postJson(path, payload) {
-    if (!window.__codexSessionDeleteBridge) {
-      return { status: "failed", message: "桥接不可用，请重启启动器" };
+    if (window.__codexSessionDeleteBridge) {
+      return await window.__codexSessionDeleteBridge(path, payload);
     }
-    return await window.__codexSessionDeleteBridge(path, payload);
+    const response = await fetch(`${helperBase}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+    return await response.json();
   }
 
   let codexModelCatalog = { status: "loading", model: "", default_model: "", model_provider: "", provider_name: "", models: [], sources: [], responses_api: { status: "unknown", message: "" } };

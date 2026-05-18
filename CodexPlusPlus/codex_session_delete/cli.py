@@ -345,11 +345,18 @@ def run_attach(args: argparse.Namespace) -> int:
         ),
         debug_port,
     )
-    server = launcher.start_or_attach_helper(service, export_service, port=helper_port)
+    server = launcher.start_or_attach_helper(service, export_service, runtime, port=helper_port)
     codex_proc = launcher.running_windows_codex_process_id(app_dir)
     try:
         time.sleep(4.0)
         script_path = Path(launcher.__file__).parent / "inject" / "renderer-inject.js"
+        if os.environ.get("CODEX_REBUILD_PLUS_PLUS_MAIN_INJECT") == "1":
+            launcher._log_runtime_event("main-process renderer injection mode; CDP injection skipped")
+            server.watchdog_debug_port = debug_port
+            server.watchdog_app_dir = app_dir
+            append_watchdog_event("attach_ready_main_inject", **watchdog_status(server, debug_port, app_dir))
+            wait_for_shutdown(server, codex_proc, debug_port)
+            return 0
         while True:
             try:
                 server.bridge_socket = launcher.inject_with_retry(

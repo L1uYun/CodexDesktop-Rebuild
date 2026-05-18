@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import unquote
 from urllib.request import Request, urlopen
-from typing import Protocol
+from typing import Callable, Protocol
 
 from codex_session_delete.models import DeleteResult, DeleteStatus, ExportResult, ExportStatus, SessionRef
 
@@ -52,12 +52,14 @@ class HelperServer(ThreadingHTTPServer):
         http_mutation_token: str | None = None,
         ad_list_url: str = "https://raw.githubusercontent.com/BigPizzaV3/Ad-List/main/ads.json",
         ad_list_backup_urls: list[str] | None = None,
+        bridge_handler: Callable[[str, dict[str, object]], dict[str, object]] | None = None,
     ):
         self.service = service
         self.export_service = export_service
         self.allow_http_mutation = allow_http_mutation
         self.http_mutation_token = http_mutation_token
         self.ad_list_urls = [ad_list_url, *(ad_list_backup_urls or DEFAULT_AD_LIST_URLS[1:])]
+        self.bridge_handler = bridge_handler
         super().__init__((host, port), _Handler)
 
     @property
@@ -86,6 +88,22 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         try:
             payload = self._read_json()
+            if self.server.bridge_handler is not None and self.path in {
+                "/settings/get",
+                "/settings/set",
+                "/user-scripts/list",
+                "/user-scripts/set-enabled",
+                "/user-scripts/set-script-enabled",
+                "/user-scripts/reload",
+                "/devtools/open",
+                "/backend/status",
+                "/backend/repair",
+                "/codex-model-catalog",
+                "/codex-config-model",
+                "/ads",
+            }:
+                self._send_json(self.server.bridge_handler(self.path, payload))
+                return
             if self.path in {"/delete", "/undo", "/archived-thread", "/export-markdown"} and not self._is_mutation_authorized():
                 self._send_json({"error": "forbidden"}, status=403)
                 return
