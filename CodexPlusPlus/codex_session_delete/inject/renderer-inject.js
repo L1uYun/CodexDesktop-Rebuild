@@ -66,7 +66,7 @@
     if (!isAvatarOverlayPage()) return;
     const target = document.querySelector(".codex-avatar-button");
     const body = target?.querySelector?.(".codex-avatar-root");
-    const motionVersion = "5";
+    const motionVersion = "6";
     if (!target) {
       clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
       window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);
@@ -87,12 +87,16 @@
     function step(now) {
       if (!document.documentElement.contains(target)) return;
       if (body) {
-        const frameIndex = Math.floor(now / 95) % 8;
+        const mode = typeof window.__codexAvatarMotionMode === "string" ? window.__codexAvatarMotionMode : "probe";
+        const moving = mode === "creep" || mode === "retreat" || mode === "home";
+        const probing = mode === "probe";
+        const frameIndex = moving ? Math.floor(now / 95) % 8 : probing ? Math.floor(now / 220) % 2 : 0;
         const sector = Number.isInteger(window.__codexAvatarWalkDirection) ? window.__codexAvatarWalkDirection : 0;
         const directionRows = ["12.5%", "25%", "37.5%", "50%", "62.5%", "75%", "87.5%", "100%"];
         const crawlRow = directionRows[((sector % 8) + 8) % 8];
-        body.style.backgroundPosition = `${((frameIndex / 7) * 100).toFixed(3)}% ${crawlRow}`;
-        const bodyLift = Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -1 : 0;
+        const column = moving ? (frameIndex / 7) * 100 : probing ? frameIndex * 14.286 : 0;
+        body.style.backgroundPosition = `${column.toFixed(3)}% ${crawlRow}`;
+        const bodyLift = moving ? (Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -1 : 0) : probing ? -.35 : 0;
         body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;
       }
       window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);

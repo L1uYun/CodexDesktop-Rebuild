@@ -20,6 +20,11 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "mode=`retreat`" in text
     assert "mode=`home`" in text
     assert "e.mode===`creep`" in text
+    assert "target:0" in text
+    assert "e.target!==p.id&&(e.target=p.id)" in text
+    assert "let z=c.find(t=>t.id===e.target)||p" in text
+    assert "z.workArea" in text
+    assert "window.__codexAvatarMotionMode" in text
     assert "C+=(Math.random()-.5)*34" not in text
     assert "!f&&(C+=(Math.random()-.5)*34" not in text
     assert "p.id===d.id&&(C+=(Math.random()-.5)*34" not in text
@@ -28,7 +33,6 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "n.screen.getDisplayNearestPoint(FU(i.getBounds())).bounds" in text
     assert "n.screen.getDisplayNearestPoint(FU(o)).bounds" in text
     assert "[s,c,l].reduce" in text
-    assert "home:0,from:0" in text
-    assert "e.from=d.id" in text
-    assert "c.find(t=>t.id===e.from)||d" in text
+    assert "home:0,from:0,target:0" in text
+    assert "e.from||(e.from=d.id)" in text
     assert "s.x+s.width<=t.x+t.width-24" in text
