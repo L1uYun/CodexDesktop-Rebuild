@@ -576,7 +576,8 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "patchFastModeGateOnObject" not in text
     assert "Codex++" in text
     assert "codexPlusVersion = \"1.0.7\"" in text
-    assert 'trigger.textContent = "Codex++"' in text
+    assert "document.getElementById(codexPlusMenuId)?.remove();" in text
+    assert "document.getElementById(codexPlusLauncherId)?.remove();" in text
     assert "提出问题" in text
     assert "https://github.com/BigPizzaV3/CodexPlusPlus/issues" in text
     assert "window.open(issueUrl, \"_blank\")" in text
