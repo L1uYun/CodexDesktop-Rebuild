@@ -66,7 +66,7 @@
     if (!isAvatarOverlayPage()) return;
     const target = document.querySelector(".codex-avatar-button");
     const body = target?.querySelector?.(".codex-avatar-root");
-    const motionVersion = "11";
+    const motionVersion = "10";
     if (!target) {
       clearTimeout(window.__codexAvatarBionicMotionRetryTimer);
       window.__codexAvatarBionicMotionRetryTimer = setTimeout(installAvatarBionicMotion, 250);
@@ -89,18 +89,18 @@
       if (body) {
         const mode = typeof window.__codexAvatarMotionMode === "string" ? window.__codexAvatarMotionMode : "probe";
         const intensity = Math.max(0, Math.min(1, Number(window.__codexAvatarMotionIntensity) || 0));
-        const moving = mode === "creep" || mode === "retreat" || mode === "home" || mode === "startle" || mode === "pounce";
+        const moving = mode === "creep" || mode === "retreat" || mode === "home" || mode === "startle";
         const probing = mode === "probe" || mode === "freeze";
         const movingFrameMs = Math.max(58, 118 - intensity * 54);
         const probeFrameMs = Math.max(120, 260 - intensity * 120);
-        const frameIndex = mode === "startle" || mode === "pounce" ? Math.floor(now / 48) % 8 : moving ? Math.floor(now / movingFrameMs) % 8 : probing ? Math.floor(now / probeFrameMs) % 2 : 0;
+        const frameIndex = mode === "startle" ? Math.floor(now / 48) % 8 : moving ? Math.floor(now / movingFrameMs) % 8 : probing ? Math.floor(now / probeFrameMs) % 2 : 0;
         const sector = Number.isInteger(window.__codexAvatarWalkDirection) ? window.__codexAvatarWalkDirection : 0;
         const directionRows = ["12.5%", "25%", "37.5%", "50%", "62.5%", "75%", "87.5%", "100%"];
         const crawlRow = directionRows[((sector % 8) + 8) % 8];
         const column = moving ? (frameIndex / 7) * 100 : probing ? frameIndex * 14.286 : 0;
         body.style.backgroundPosition = `${column.toFixed(3)}% ${crawlRow}`;
         const stepLift = Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -(0.7 + intensity * 0.9) : 0;
-        const bodyLift = mode === "startle" || mode === "pounce" ? (Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -2.2 : .4) : moving ? stepLift : probing ? -(0.25 + intensity * 0.75) : 0;
+        const bodyLift = mode === "startle" ? (Math.sin((frameIndex / 8) * Math.PI * 2) < 0 ? -2.2 : .4) : moving ? stepLift : probing ? -(0.25 + intensity * 0.75) : 0;
         body.style.transform = `translate3d(0, ${bodyLift.toFixed(2)}px, 0)`;
       }
       window.__codexAvatarBionicMotionFrame = requestAnimationFrame(step);

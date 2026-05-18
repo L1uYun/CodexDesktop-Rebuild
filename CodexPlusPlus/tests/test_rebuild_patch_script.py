@@ -22,7 +22,7 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "mode=`retreat`" in text
     assert "mode=`home`" in text
     assert "mode=`startle`" in text
-    assert "mode=`pounce`" in text
+    assert "mode=`pounce`" not in text
     assert "mode=`freeze`" in text
     assert "mode=`watch`" not in text
     assert "mode=`curious`" not in text
@@ -30,9 +30,11 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "mode=`tired`" not in text
     assert "mode=`wall`" not in text
     assert "lastK:999" in text
-    assert "pounce:0" in text
+    assert "nudge:0" in text
     assert "e.lastK-k>24" in text
-    assert "h>e.pounce&&k>68&&k<132" in text
+    assert "h>e.nudge&&k>88&&k<150" in text
+    assert "e.nudge=h+3200" in text
+    assert "C=-D/k*18,w=-O/k*14" in text
     assert "e.near&&h-e.near<520" in text
     assert "e.near&&h-e.near>=520" in text
     assert "k>170&&k<310" not in text
@@ -48,7 +50,7 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "A=c.map(e=>e.workArea).filter(e=>V(G,e))" in text
     assert "A.length>1?U(A):d.workArea" in text
     assert "avatar-boundary" not in text
-    assert "e.mode===`startle`?1:e.mode===`pounce`?.92:e.mode===`retreat`?.78" in text
+    assert "e.mode===`startle`?1:e.mode===`retreat`?.78" in text
     assert "C+=(Math.random()-.5)*34" not in text
     assert "!f&&(C+=(Math.random()-.5)*34" not in text
     assert "p.id===d.id&&(C+=(Math.random()-.5)*34" not in text
