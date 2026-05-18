@@ -7,7 +7,7 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     root = Path(__file__).resolve().parents[2]
     text = (root / "scripts" / "build-from-upstream.js").read_text(encoding="utf-8")
 
-    assert "__codexRebuildAvatarAutoOpenVersion!==9" in text
+    assert "__codexRebuildAvatarAutoOpenVersion!==10" in text
     assert "avatar-main-walk-started" in text
     assert "M.avatarOverlayManager.autoMove" in text
     assert "window.__codexAvatarWalkDirection" in text
@@ -16,5 +16,7 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "d.id!==p.id||k>=70" in text
     assert "k>.001&&h-e.near>=900" in text
     assert "C+=(Math.random()-.5)*34" in text
-    assert "C+=Math.max(-70,Math.min(70,n/9))" in text
+    assert "e.vx=n/i*115" in text
+    assert "p.id===d.id&&(C+=(Math.random()-.5)*34" in text
+    assert "p.id!==d.id?130:38" in text
     assert "Math.round(e.x-o.left)" in text
