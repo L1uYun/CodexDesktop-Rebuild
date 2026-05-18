@@ -14,13 +14,15 @@ def test_rebuild_avatar_walk_runs_from_main_process():
     assert "M.avatarOverlayManager.autoMove" in text
     assert "window.__codexAvatarWalkDirection" in text
     assert "M.avatarOverlayManager.getLayout(i).mascot" in text
-    assert "Math.exp(-.75*g)" in text
-    assert "f||k>=70" in text
-    assert "k>.001&&h-e.near>=900" in text
-    assert "C+=(Math.random()-.5)*34" in text
-    assert "e.vx=n/i*115" in text
-    assert "!f&&(C+=(Math.random()-.5)*34" in text
-    assert "f?130:38" in text
+    assert "mode:`rest`" in text
+    assert "mode=`probe`" in text
+    assert "mode=`creep`" in text
+    assert "mode=`retreat`" in text
+    assert "mode=`home`" in text
+    assert "e.mode===`creep`" in text
+    assert "C+=(Math.random()-.5)*34" not in text
+    assert "!f&&(C+=(Math.random()-.5)*34" not in text
+    assert "p.id===d.id&&(C+=(Math.random()-.5)*34" not in text
     assert "Math.round(e.x-o.left)" in text
     assert "t+a.mascot.left" in text
     assert "n.screen.getDisplayNearestPoint(FU(i.getBounds())).bounds" in text
