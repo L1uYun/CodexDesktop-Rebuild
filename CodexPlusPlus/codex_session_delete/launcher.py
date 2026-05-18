@@ -965,8 +965,8 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         target_work = target_monitor["work"]
         target_x = min(max(target_work[0], state["x"]), max(target_work[0], target_work[2] - width))
         target_y = min(max(target_work[1], state["y"]), max(target_work[1], target_work[3] - height))
-        steer_x += max(-6.0, min(6.0, (target_x - state["x"]) / 140.0))
-        steer_y += max(-2.0, min(2.0, (target_y - state["y"]) / 260.0))
+        steer_x += max(-2.8, min(2.8, (target_x - state["x"]) / 280.0))
+        steer_y += max(-1.2, min(1.2, (target_y - state["y"]) / 440.0))
     if cursor is not None:
         cursor_push_x, cursor_push_y = _avatar_cursor_repulsion_after_grace(
             state,
@@ -977,8 +977,8 @@ def move_avatar_window_once(debug_port: int, state: dict[str, float]) -> bool:
         )
     vx += steer_x * 38.0
     vy += steer_y * 30.0
-    vx += cursor_push_x * 18.0
-    vy += cursor_push_y * 18.0
+    vx += cursor_push_x * 32.0
+    vy += cursor_push_y * 32.0
     if abs(steer_x) > 0.4 or abs(steer_y) > 0.4 or abs(cursor_push_x) > 0.4 or abs(cursor_push_y) > 0.4:
         state["heading"] = math.atan2(vy / 0.72, vx)
     state["x"] += vx * dt
@@ -1076,7 +1076,7 @@ def _avatar_cursor_repulsion(center_x: float, center_y: float, cursor: tuple[flo
     unit_x = dx / distance
     unit_y = dy / distance
     strength = ((radius - distance) / radius) ** 2
-    return (unit_x * strength * 1.4, unit_y * strength * 1.4)
+    return (unit_x * strength * 2.1, unit_y * strength * 2.1)
 
 
 def _avatar_cursor_repulsion_after_grace(

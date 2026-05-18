@@ -188,7 +188,7 @@ def test_avatar_random_walk_targets_cursor_screen_when_dragged_to_secondary(monk
         tick["value"] += 0.12
     move_calls = [call for call in calls if call[0] == "ws://avatar"]
     direction_calls = [call for call in calls if call[0] == "direction"]
-    assert move_calls[-1][1] > 1200
+    assert 620 < move_calls[-1][1] < 1000
     assert direction_calls[-1][2] == 0
 
 
@@ -217,6 +217,7 @@ def test_avatar_random_walk_steers_away_from_cursor(monkeypatch):
     assert launcher.move_avatar_window_once(19339, state) is True
 
     assert calls[-1][1] > 300
+    assert calls[-1][1] >= 304
 
 
 def test_avatar_random_walk_allows_click_before_cursor_repulsion(monkeypatch):
