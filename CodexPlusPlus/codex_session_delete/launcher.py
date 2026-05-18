@@ -1191,14 +1191,29 @@ def check_and_reinject_bridge(
     export_service: MarkdownExportService,
     runtime: CodexPlusRuntime,
 ) -> bool:
-    websocket_url = runtime.websocket_url
-    if not websocket_url:
+    with runtime.lock:
+        websocket_urls = list(runtime.websocket_urls or ({runtime.websocket_url} if runtime.websocket_url else set()))
+    if not websocket_urls:
         return False
+    failed_urls: list[str] = []
+    missing_urls: list[str] = []
     try:
-        result = evaluate_script(websocket_url, "typeof window.__codexSessionDeleteBridge === 'function'")
-        if result.get("result", {}).get("result", {}).get("value"):
+        for websocket_url in websocket_urls:
+            try:
+                result = evaluate_script(websocket_url, "typeof window.__codexSessionDeleteBridge === 'function'")
+                if not result.get("result", {}).get("result", {}).get("value"):
+                    missing_urls.append(websocket_url)
+            except Exception:
+                failed_urls.append(websocket_url)
+        if failed_urls:
+            with runtime.lock:
+                runtime.websocket_urls.difference_update(failed_urls)
+                if runtime.websocket_url in failed_urls:
+                    runtime.websocket_url = next(iter(runtime.websocket_urls), None)
+        if not missing_urls and not failed_urls:
             return False
-        _log_runtime_event(f"renderer bridge missing; reinjecting debug_port={debug_port} helper_port={helper_port}")
+        detail = "closed" if failed_urls and not missing_urls else "missing"
+        _log_runtime_event(f"renderer bridge {detail}; reinjecting debug_port={debug_port} helper_port={helper_port}")
     except Exception as exc:
         _log_runtime_event(f"bridge health check failed; reinjecting debug_port={debug_port} helper_port={helper_port}: {exc}")
     try:

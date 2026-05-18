@@ -570,7 +570,8 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "/backend/status" in text
     assert "/backend/repair" in text
     assert "window.__codexSessionDeleteBridge" in text
-    assert "fetch(`${helperBase}${path}`" in text
+    assert "fetch(`${helperBase}${path}`" not in text
+    assert "Codex++ bridge 未连接" in text
 
     assert "setAuthMethod(\"chatgpt\")" in text
     assert "patchFastModeGateOnObject" not in text
@@ -666,7 +667,7 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "function installAvatarBionicMotion" in text
     assert 'document.querySelector(".codex-avatar-button")' in text
     assert "dataset.codexAvatarBionicMotion" in text
-    assert 'const motionVersion = "6"' in text
+    assert 'const motionVersion = "10"' in text
     assert "__codexAvatarBionicMotionRetryTimer" in text
     assert "setTimeout(installAvatarBionicMotion, 250)" in text
     assert "requestAnimationFrame(step)" in text
@@ -676,8 +677,14 @@ def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
     assert "backgroundPosition" in text
     assert "frameIndex" in text
     assert "__codexAvatarMotionMode" in text
-    assert 'mode === "creep" || mode === "retreat" || mode === "home"' in text
-    assert 'mode === "probe"' in text
+    assert "__codexAvatarMotionIntensity" in text
+    assert 'mode === "creep" || mode === "retreat" || mode === "home" || mode === "startle"' in text
+    assert 'mode === "probe" || mode === "freeze"' in text
+    assert "movingFrameMs" in text
+    assert "probeFrameMs" in text
+    assert "stepLift" in text
+    assert 'mode === "startle" ? Math.floor(now / 48) % 8' in text
+    assert 'mode === "threat"' not in text
     assert "crawlRow" in text
     assert "87.5%" in text
     assert "25%" in text

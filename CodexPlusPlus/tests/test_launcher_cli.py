@@ -277,6 +277,24 @@ def test_check_and_reinject_bridge_reinjects_when_bridge_missing(monkeypatch, tm
     assert any(event[0] == "log" and "renderer bridge missing" in event[1] for event in events)
 
 
+def test_check_and_reinject_bridge_checks_all_runtime_targets(monkeypatch, tmp_path):
+    events = []
+    runtime = launcher.CodexPlusRuntime("ws://main", type("Scripts", (), {"build_enabled_bundle": lambda self: ""})(), 9229)
+    runtime.websocket_urls.update({"ws://main", "ws://child"})
+
+    def evaluate(websocket_url, script):
+        return {"result": {"result": {"value": websocket_url == "ws://main"}}}
+
+    monkeypatch.setattr(launcher, "evaluate_script", evaluate)
+    monkeypatch.setattr(launcher, "inject_with_retry", lambda *args, **kwargs: events.append(("inject", args, kwargs)))
+    monkeypatch.setattr(launcher, "_log_runtime_event", lambda message: events.append(("log", message)))
+
+    assert launcher.check_and_reinject_bridge(9229, tmp_path / "renderer.js", 57321, object(), object(), runtime) is True
+
+    assert any(event[0] == "inject" for event in events)
+    assert any(event[0] == "log" and "renderer bridge missing" in event[1] for event in events)
+
+
 def test_inject_with_retry_tracks_all_injected_page_targets(monkeypatch, tmp_path):
     evaluations = []
     runtime = launcher.CodexPlusRuntime(
