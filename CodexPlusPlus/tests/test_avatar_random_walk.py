@@ -9,6 +9,38 @@ def test_avatar_random_walk_returns_false_without_avatar_target(monkeypatch):
     assert launcher.move_avatar_window_once(19339, {}) is False
 
 
+def test_avatar_random_walk_logs_when_started(monkeypatch):
+    events = []
+    owner_socket = type(
+        "FakeSocket",
+        (),
+        {
+            "bind": lambda self, address: None,
+            "listen": lambda self, backlog: None,
+            "close": lambda self: None,
+        },
+    )()
+
+    class FakeThread:
+        def __init__(self, target, daemon):
+            self.target = target
+            self.daemon = daemon
+            self.started = False
+
+        def start(self):
+            self.started = True
+
+    monkeypatch.setattr(launcher.socket, "socket", lambda *args, **kwargs: owner_socket)
+    monkeypatch.setattr(launcher.threading, "Thread", FakeThread)
+    monkeypatch.setattr(launcher, "_log_runtime_event", lambda message: events.append(message))
+
+    thread = launcher.start_avatar_random_walk(19339)
+
+    assert thread is not None
+    assert thread.started is True
+    assert events == ["avatar random walk started debug_port=19339"]
+
+
 def test_avatar_random_walk_returns_false_without_avatar_websocket(monkeypatch):
     monkeypatch.setattr(
         launcher.cdp,

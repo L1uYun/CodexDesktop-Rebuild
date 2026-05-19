@@ -892,6 +892,7 @@ def start_avatar_random_walk(debug_port: int, interval: float = 0.045) -> thread
 
     thread = threading.Thread(target=watch, daemon=True)
     thread.start()
+    _log_runtime_event(f"avatar random walk started debug_port={debug_port}")
     return thread
 
 
@@ -1252,8 +1253,7 @@ def launch_and_inject(app_dir: Path | None, db_path: Path | None, backup_dir: Pa
             codex_proc = launch_codex_app(resolved_app_dir, debug_port)
         server.bridge_socket = inject_with_retry(debug_port, script_path, server.port, service, export_service, runtime)
         start_bridge_watchdog(debug_port, script_path, server.port, service, export_service, runtime)
-        if os.environ.get("CODEX_REBUILD_AVATAR_MAIN_WALK") != "1":
-            start_avatar_random_walk(debug_port)
+        start_avatar_random_walk(debug_port)
         return server, codex_proc
     except Exception:
         shutdown_helper(server)

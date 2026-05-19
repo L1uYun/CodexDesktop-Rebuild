@@ -352,6 +352,7 @@ def run_attach(args: argparse.Namespace) -> int:
         script_path = Path(launcher.__file__).parent / "inject" / "renderer-inject.js"
         if os.environ.get("CODEX_REBUILD_PLUS_PLUS_MAIN_INJECT") == "1":
             launcher._log_runtime_event("main-process renderer injection mode; CDP injection skipped")
+            launcher.start_avatar_random_walk(debug_port)
             server.watchdog_debug_port = debug_port
             server.watchdog_app_dir = app_dir
             append_watchdog_event("attach_ready_main_inject", **watchdog_status(server, debug_port, app_dir))
@@ -376,8 +377,7 @@ def run_attach(args: argparse.Namespace) -> int:
                 append_watchdog_event("attach_retry", error=repr(exc), **watchdog_status(server, debug_port, app_dir))
                 time.sleep(3)
         launcher.start_bridge_watchdog(debug_port, script_path, server.port, service, export_service, runtime)
-        if os.environ.get("CODEX_REBUILD_AVATAR_MAIN_WALK") != "1":
-            launcher.start_avatar_random_walk(debug_port)
+        launcher.start_avatar_random_walk(debug_port)
         server.watchdog_debug_port = debug_port
         server.watchdog_app_dir = app_dir
         append_watchdog_event("attach_ready", **watchdog_status(server, debug_port, app_dir))
