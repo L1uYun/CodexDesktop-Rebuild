@@ -1047,10 +1047,6 @@
   }
 
   function installCodexPlusMenu() {
-    document.getElementById(codexPlusMenuId)?.remove();
-    document.getElementById(codexPlusLauncherId)?.remove();
-    removeDuplicateCodexPlusMenus(null);
-    return;
     if (isAvatarOverlayPage()) {
       removeDuplicateCodexPlusMenus(null);
       return;
@@ -1096,8 +1092,6 @@
   }
 
   function installCodexPlusLauncher() {
-    document.getElementById(codexPlusLauncherId)?.remove();
-    return;
     if (isAvatarOverlayPage()) {
       removeDuplicateCodexPlusMenus(null);
       return;

@@ -577,8 +577,8 @@ def test_renderer_script_includes_user_script_manager_ui_contract():
     assert "patchFastModeGateOnObject" not in text
     assert "Codex++" in text
     assert "codexPlusVersion = \"1.0.7\"" in text
-    assert "document.getElementById(codexPlusMenuId)?.remove();" in text
-    assert "document.getElementById(codexPlusLauncherId)?.remove();" in text
+    assert "removeDuplicateCodexPlusMenus(existing)" in text
+    assert "removeDuplicateCodexPlusMenus(menu)" in text
     assert "提出问题" in text
     assert "https://github.com/BigPizzaV3/CodexPlusPlus/issues" in text
     assert "window.open(issueUrl, \"_blank\")" in text
@@ -659,6 +659,20 @@ def test_renderer_script_skips_codex_plus_menu_on_avatar_overlay():
     assert 'searchParams.get("initialRoute") === "/avatar-overlay"' in text
     assert "if (isAvatarOverlayPage())" in text
     assert "removeDuplicateCodexPlusMenus(null)" in text
+
+
+def test_renderer_script_does_not_disable_codex_plus_entrypoints():
+    text = Path("codex_session_delete/inject/renderer-inject.js").read_text(encoding="utf-8")
+
+    menu_start = text.index("function installCodexPlusMenu()")
+    launcher_start = text.index("function installCodexPlusLauncher()")
+    menu_prologue = text[menu_start:menu_start + 220]
+    launcher_prologue = text[launcher_start:launcher_start + 180]
+
+    assert "return;\n    if (isAvatarOverlayPage())" not in menu_prologue
+    assert "return;\n    if (isAvatarOverlayPage())" not in launcher_prologue
+    assert "document.documentElement.appendChild(menu)" in text
+    assert "document.documentElement.appendChild(launcher)" in text
 
 
 def test_renderer_script_adds_bionic_motion_to_avatar_overlay_only():
